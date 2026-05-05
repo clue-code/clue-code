@@ -248,16 +248,22 @@ func (s *jsonStore) WriteWithRetry(ctx context.Context, key string, value []byte
 }
 
 func (s *jsonStore) Append(_ context.Context, key string, value []byte, scope Scope) error {
+	cleanKey, err := sanitizeKey(key)
+	if err != nil {
+		return err
+	}
 	jsonPath, err := s.jsonFilePath(scope)
 	if err != nil {
 		return err
 	}
-	// Append uses the raw file path derived from key, not the JSON wrapper.
-	appendPath := filepath.Join(filepath.Dir(jsonPath), key)
+	// Append uses the raw file path derived from the sanitized key, not the
+	// JSON wrapper. sanitizeKey rejects absolute paths and parent traversal,
+	// so the join cannot escape the scope root.
+	appendPath := filepath.Join(filepath.Dir(jsonPath), cleanKey)
 	if err := os.MkdirAll(filepath.Dir(appendPath), 0o700); err != nil {
 		return fmt.Errorf("state: mkdir for append %q: %w", appendPath, err)
 	}
-	f, err := os.OpenFile(appendPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(appendPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("state: open append file %q: %w", appendPath, err)
 	}
