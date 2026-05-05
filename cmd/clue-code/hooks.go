@@ -130,7 +130,7 @@ func runHooksTest(args []string) {
 		fmt.Fprintf(os.Stderr, "hooks test: new manager: %v\n", err)
 		os.Exit(1)
 	}
-	defer mgr.Close()
+	defer func() { _ = mgr.Close() }()
 
 	payload := map[string]any{
 		"session_id": "hooks-test",
@@ -169,7 +169,7 @@ func runHooksTail(args []string) {
 		fmt.Fprintf(os.Stderr, "hooks tail: open log: %v\n", err)
 		os.Exit(1)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := f.Seek(0, 2); err != nil {
 		fmt.Fprintf(os.Stderr, "hooks tail: seek: %v\n", err)

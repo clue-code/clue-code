@@ -35,7 +35,7 @@ func logEntries(t *testing.T, projectDir string) []hooks.LogEntry {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var entries []hooks.LogEntry
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {

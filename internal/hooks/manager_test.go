@@ -12,20 +12,6 @@ import (
 	"time"
 )
 
-// loadYAMLConfig reads a testdata YAML file and returns a parsed Config.
-func loadYAMLConfig(t *testing.T, name string) *Config {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", name))
-	if err != nil {
-		t.Fatalf("read testdata/%s: %v", name, err)
-	}
-	cfg, err := parseConfig(data)
-	if err != nil {
-		t.Fatalf("parse testdata/%s: %v", name, err)
-	}
-	return cfg
-}
-
 // readLogLines returns all NDJSON lines from hooks.log in projectDir.
 func readLogLines(t *testing.T, projectDir string) []LogEntry {
 	t.Helper()
@@ -34,7 +20,7 @@ func readLogLines(t *testing.T, projectDir string) []LogEntry {
 	if err != nil {
 		t.Fatalf("open hooks.log: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var entries []LogEntry
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -69,7 +55,7 @@ func TestSessionStart_LogsExactlyOneEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 
 	_, err = m.Fire(context.Background(), EventSessionStart, map[string]any{"session_id": "s1"})
 	if err != nil {
@@ -114,7 +100,7 @@ func TestRunSpec_TimeoutKilled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 
 	start := time.Now()
 	_, fireErr := m.Fire(context.Background(), EventPreToolUse, map[string]any{"session_id": "s2"})
@@ -162,7 +148,7 @@ func TestDepthGuard_Hermetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 
 	_, err = m.Fire(context.Background(), EventPreToolUse, map[string]any{"session_id": "s3"})
 	if !errors.Is(err, ErrHookDepthExceeded) {
@@ -189,7 +175,7 @@ func TestInject_WrapsContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 
 	injected, err := m.Fire(context.Background(), EventUserPromptSubmit, map[string]any{"session_id": "s4"})
 	if err != nil {
@@ -224,7 +210,7 @@ func TestBlocking_AbortsOnNonZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 
 	_, fireErr := m.Fire(context.Background(), EventPreToolUse, map[string]any{"session_id": "s5"})
 	if fireErr == nil {
@@ -247,7 +233,7 @@ func TestNoConfig_CleanRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 
 	injected, err := m.Fire(context.Background(), EventSessionStart, map[string]any{"session_id": "s6"})
 	if err != nil {

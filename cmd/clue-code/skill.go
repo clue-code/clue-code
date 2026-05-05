@@ -105,7 +105,7 @@ func runSkillRun(args []string) {
 		fmt.Fprintf(os.Stderr, "skill run: new hooks manager: %v\n", err)
 		os.Exit(1)
 	}
-	defer mgr.Close()
+	defer func() { _ = mgr.Close() }()
 
 	eng := skillrunner.NewEngine(mgr)
 	if loadErr := eng.Load(*skillsDir); loadErr != nil {
