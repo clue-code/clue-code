@@ -3,7 +3,7 @@
 > **The open-source multi-agent AI orchestration OS for developers and teams. Local-first. Privacy-first. Evolving at the weights level.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/go-1.22%2B-00ADD8.svg)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/go-1.25%2B-00ADD8.svg)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
 
 CLUE CODE replaces (or augments) Claude Code, Cursor, and GitHub Copilot with **19 specialized agents**, **8 orchestrated workflows**, and **3 runtime modes** (local, cloud, hybrid) — running on **open-source models** (Qwen3-Coder, DeepSeek V3.2/R1, Llama 4) with **continual learning** at the weights level (LoRA).
