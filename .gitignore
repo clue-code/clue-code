@@ -1,0 +1,97 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+clue-code
+clue-code-*
+/dist/
+/build/
+/bin/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# Local config / secrets
+*.local.yaml
+*.local.json
+.env
+.env.local
+.env.*.local
+.envrc
+
+# Runtime state
+.clue-code/
+.omc/state/
+.omc/sessions/
+.omc/logs/
+*.log
+*.pid
+
+# Models / LoRA artifacts (large)
+models/
+loras/
+*.safetensors
+*.gguf
+*.mlx
+
+# Cache
+.cache/
+.embedding-cache/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+.vs/
+*.code-workspace
+
+# Node (for any frontend additions)
+node_modules/
+npm-debug.log*
+yarn-error.log
+.pnpm-store/
+
+# Python (for LoRA pipeline Phase 5)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Misc
+*.bak
+*.orig
+tmp/
+.tmp/
