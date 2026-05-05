@@ -1,0 +1,4 @@
+events:
+  SessionStart:
+    - command: "echo hello"
+      timeout: 5s

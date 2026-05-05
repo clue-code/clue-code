@@ -4,8 +4,11 @@
 *.dll
 *.so
 *.dylib
-clue-code
-clue-code-*
+# Anchored to repo root — these patterns match the BUILT BINARY at /clue-code,
+# NOT the source directory cmd/clue-code/ which would otherwise be silently
+# ignored (bug discovered post-Phase-4.1: cmd/clue-code/* never tracked).
+/clue-code
+/clue-code-*
 /dist/
 /build/
 /bin/

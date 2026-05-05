@@ -16,7 +16,7 @@ const dirName = ".clue-code"
 // paths, NUL bytes, or (for sessionID) path separators are rejected with
 // ErrInvalidKey.
 func ResolvePath(scope Scope, key, sessionID string) (string, error) {
-	cleanKey, err := sanitizeKey(key)
+	cleanKey, err := SanitizeKey(key)
 	if err != nil {
 		return "", err
 	}
@@ -36,7 +36,7 @@ func ResolvePath(scope Scope, key, sessionID string) (string, error) {
 		return filepath.Join(root, dirName, "state", cleanKey), nil
 
 	case ScopeSession:
-		cleanSID, err := sanitizeSessionID(sessionID)
+		cleanSID, err := SanitizeIdentifier(sessionID)
 		if err != nil {
 			return "", err
 		}

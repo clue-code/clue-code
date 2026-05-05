@@ -1,0 +1,5 @@
+events:
+  PreToolUse:
+    - command: "clue-code hooks fire-test"
+      timeout: 5s
+      blocking: true
