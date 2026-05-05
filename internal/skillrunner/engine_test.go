@@ -23,7 +23,7 @@ func makeManager(t *testing.T, cfg *hooks.Config) (*hooks.Manager, string) {
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	t.Cleanup(func() { m.Close() })
+	t.Cleanup(func() { _ = m.Close() })
 	return m, dir
 }
 

@@ -59,6 +59,13 @@ func runSpec(ctx context.Context, spec Spec) (Result, error) {
 	// Propagate env and increment depth for child.
 	cmd.Env = childEnv(parentDepth + 1)
 
+	// Cap the post-cancel I/O drain so a forked grandchild (e.g. `sh -c
+	// 'sleep 60'` on Linux/dash where the child is forked rather than
+	// exec-replaced) cannot keep stdout/stderr pipes open after the shell
+	// is SIGKILLed. Without WaitDelay, Wait() blocks until the orphan
+	// finishes naturally — observed as 60s "TimedOut" tests on ubuntu CI.
+	cmd.WaitDelay = 2 * time.Second
+
 	// Capture stdout with a bounded reader; capture stderr unbounded (it is
 	// internal diagnostic output and is not forwarded to the user).
 	var stdoutBuf boundedBuffer
