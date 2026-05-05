@@ -17,7 +17,7 @@ type realClock struct{}
 
 func (realClock) Now() time.Time                  { return time.Now() }
 func (realClock) Since(t time.Time) time.Duration { return time.Since(t) }
-func (realClock) Sleep(d time.Duration)            { time.Sleep(d) }
+func (realClock) Sleep(d time.Duration)           { time.Sleep(d) }
 
 // FakeClock is a manually-advanced Clock for use in tests.
 type FakeClock struct {

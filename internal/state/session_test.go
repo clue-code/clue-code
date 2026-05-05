@@ -47,18 +47,34 @@ func TestB2_ZeroHeartbeat(t *testing.T) {
 	}
 }
 
-// TestB3_ListActive verifies that all three sessions from the fixture index
-// are returned by ListActive when the global sessions dir is overridden.
+// TestB3_ListActive verifies that three sessions across three project paths
+// are all returned by ListActive (B3).
+//
+// Fixture is constructed inline rather than checked-in because the canonical
+// fixture path uses a `.clue-code/` directory which the project-root
+// `.gitignore` excludes (runtime state). Inline construction is also
+// hermetic across CI runners.
 func TestB3_ListActive(t *testing.T) {
-	// Point globalSessionsDir to our fixture by setting HOME.
-	fixtureHome := filepath.Join("testdata", "home-fixture")
-	abs, err := filepath.Abs(fixtureHome)
+	tmp := t.TempDir()
+	sessDir := filepath.Join(tmp, ".clue-code", "sessions")
+	if err := os.MkdirAll(sessDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	descs := []SessionDescriptor{
+		{ID: "sess-abc123", ProjectPath: filepath.Join(tmp, "proj-a"), StartedAt: now, PID: 1001, Skill: "autopilot"},
+		{ID: "sess-def456", ProjectPath: filepath.Join(tmp, "proj-b"), StartedAt: now, PID: 1002, Skill: "ralph"},
+		{ID: "sess-ghi789", ProjectPath: filepath.Join(tmp, "proj-c"), StartedAt: now, PID: 1003, Skill: "team"},
+	}
+	data, err := json.Marshal(descs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	origHome := os.Getenv("HOME")
-	t.Setenv("HOME", abs)
-	defer os.Setenv("HOME", origHome)
+	if err := os.WriteFile(filepath.Join(sessDir, "index.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", tmp)
 
 	sessions, err := ListActive()
 	if err != nil {

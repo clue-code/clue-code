@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	watchBufSize    = 64
-	pollInterval    = time.Second
+	watchBufSize = 64
+	pollInterval = time.Second
 )
 
 // Watch returns a channel that emits SessionDescriptor events whenever the

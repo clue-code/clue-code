@@ -58,8 +58,8 @@ type jsonStore struct {
 // --- JSON file format ---
 
 type storeFile struct {
-	Version int                    `json:"version"`
-	Entries map[string]storeEntry  `json:"entries"`
+	Version int                   `json:"version"`
+	Entries map[string]storeEntry `json:"entries"`
 }
 
 type storeEntry struct {

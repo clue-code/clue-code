@@ -49,4 +49,3 @@ func SnapshotMetrics() map[string]any {
 		"state_watch_dropped_total":    watchDroppedTotal.Load(),
 	}
 }
-
