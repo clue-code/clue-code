@@ -26,7 +26,7 @@ func openTempStore(t *testing.T, sessionID string) state.Store {
 	// Redirect HOME so ScopeGlobal writes into the temp dir.
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", dir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	t.Cleanup(func() { _ = os.Setenv("HOME", origHome) })
 
 	// Change working directory so findProjectRoot finds dir.
 	orig, err := os.Getwd()
@@ -36,7 +36,7 @@ func openTempStore(t *testing.T, sessionID string) state.Store {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chdir(orig) })
+	t.Cleanup(func() { _ = os.Chdir(orig) })
 
 	st, err := state.Open(sessionID)
 	if err != nil {

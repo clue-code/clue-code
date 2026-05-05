@@ -59,7 +59,7 @@ func TestAcquireFlock_TimeoutReturnsBusy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Acquire using acquireFlock first so we know the lock file exists and is locked.
 	release, err := acquireFlock(lockPath, time.Second)

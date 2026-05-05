@@ -39,7 +39,7 @@ func (r *Router) Route(task string) (*Agent, error) {
 	}
 	fallback := names[0]
 	if r.warnOut != nil {
-		fmt.Fprintf(r.warnOut, "warning: agent %q not registered, falling back to %q\n", name, fallback)
+		_, _ = fmt.Fprintf(r.warnOut, "warning: agent %q not registered, falling back to %q\n", name, fallback)
 	}
 	return r.registry.Get(fallback)
 }

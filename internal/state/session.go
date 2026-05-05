@@ -151,34 +151,6 @@ func upsertIndex(desc SessionDescriptor) error {
 	return writeIndex(indexPath, sessions)
 }
 
-// removeFromIndex removes a session from the global index.
-func removeFromIndex(sessionID string) error {
-	dir, err := globalSessionsDir()
-	if err != nil {
-		return err
-	}
-	indexPath := filepath.Join(dir, indexFile)
-	lockPath := indexPath + ".lock"
-
-	release, err := acquireFlock(lockPath, lockTimeout)
-	if err != nil {
-		return fmt.Errorf("state: remove index lock: %w", err)
-	}
-	defer release() //nolint:errcheck
-
-	sessions, err := readIndex(indexPath)
-	if err != nil {
-		return err
-	}
-	filtered := sessions[:0]
-	for _, s := range sessions {
-		if s.ID != sessionID {
-			filtered = append(filtered, s)
-		}
-	}
-	return writeIndex(indexPath, filtered)
-}
-
 func readIndex(path string) ([]SessionDescriptor, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
