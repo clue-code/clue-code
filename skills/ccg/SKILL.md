@@ -1,104 +1,82 @@
 ---
 name: ccg
-description: Claude-Codex-Gemini tri-model orchestration via clue-code ask codex + clue-code ask gemini, then the orchestrator synthesizes results
-level: 5
+description: Single-turn tri-perspective consensus (Reviewer A/B/C) synthesized by the orchestrator into one response
+level: 3
 ---
 
-# CCG - Claude-Codex-Gemini Tri-Model Orchestration
+<!--
+TRANSITIONAL SIMPLIFICATION (Phase 4.6):
+This skill runs all three reviewer perspectives (A=architecture/correctness,
+B=UX/design/docs, C=risk/security) in a single model turn via prompt
+decomposition. Real multi-model parallelism (Claude + Codex + Gemini as
+separate processes) is deferred to Phase 4.7, which adds the agent invocation
+layer required to dispatch and collect results concurrently. Until then, CCG
+produces equivalent consensus quality in one turn by structuring the system
+prompt to reason from all three angles before synthesizing.
+-->
 
-CCG routes through the canonical `ask` skill (`clue-code ask codex` + `clue-code ask gemini`), then the CLUE CODE orchestrator synthesizes both outputs into one answer.
+# CCG — Tri-Perspective Consensus
 
-Use this when you want parallel external perspectives without launching tmux team workers.
+You are the CCG orchestrator. For the user's task, reason sequentially as
+three distinct reviewers, then synthesize their perspectives into one final
+response.
 
-## When to Use
+## Reviewer A — Architecture & Correctness
 
-- Backend/analysis + frontend/UI work in one request
-- Code review from multiple perspectives (architecture + design/UX)
-- Cross-validation where Codex and Gemini may disagree
-- Fast advisor-style parallel input without team runtime orchestration
+Evaluate from the perspective of a senior backend engineer:
+- Correctness, edge cases, error handling
+- Architecture fit, coupling, data flow risks
+- Test strategy and coverage gaps
+- Performance and scalability concerns
 
-## Requirements
+## Reviewer B — UX, Clarity & Alternatives
 
-- **Codex CLI**: `npm install -g @openai/codex`
-- **Gemini CLI**: `npm install -g @google/gemini-cli`
-- `clue-code ask` command available
-- If either CLI is unavailable, continue with whichever provider is available and note the limitation
+Evaluate from the perspective of a senior UX/product engineer:
+- API ergonomics and developer experience
+- Documentation clarity and completeness
+- Simpler or alternative approaches worth considering
+- Onboarding friction and discoverability
 
-## How It Works
+## Reviewer C — Risk & Security
 
-```text
-1. The orchestrator decomposes the request into two advisor prompts:
-   - Codex prompt (analysis/architecture/backend)
-   - Gemini prompt (UX/design/docs/alternatives)
+Evaluate from the perspective of a security reviewer:
+- Security vulnerabilities (injection, auth, data exposure)
+- Dependency and supply-chain risks
+- Failure modes and blast radius
+- Compliance or privacy considerations
 
-2. The orchestrator runs via CLI (skill nesting not supported):
-   - `clue-code ask codex "<codex prompt>"`
-   - `clue-code ask gemini "<gemini prompt>"`
+## Synthesis
 
-3. Artifacts are written under `.clue-code/artifacts/ask/`
+After all three reviewers have stated their positions:
 
-4. The orchestrator synthesizes both outputs into one final response
+1. List points all three agree on (high confidence).
+2. List points where reviewers conflict — state the conflict explicitly.
+3. Choose a final direction for each conflict with rationale.
+4. Produce a concise action checklist.
+
+## Output format
+
 ```
+### Reviewer A (Architecture & Correctness)
+<findings>
 
-## Execution Protocol
+### Reviewer B (UX, Clarity & Alternatives)
+<findings>
 
-When invoked, the orchestrator MUST follow this workflow:
+### Reviewer C (Risk & Security)
+<findings>
 
-### 1. Decompose Request
-Split the user request into:
-
-- **Codex prompt:** architecture, correctness, backend, risks, test strategy
-- **Gemini prompt:** UX/content clarity, alternatives, edge-case usability, docs polish
-- **Synthesis plan:** how to reconcile conflicts
-
-### 2. Invoke advisors via CLI
-
-> **Note:** Skill nesting (invoking a skill from within an active skill) is not supported. Always use the direct CLI path via Bash tool.
-
-Run both advisors:
-
-```bash
-clue-code ask codex "<codex prompt>"
-clue-code ask gemini "<gemini prompt>"
+### Synthesis
+**Agreed:** <list>
+**Conflicts:** <list with resolution>
+**Action checklist:**
+- [ ] <item>
 ```
-
-### 3. Collect artifacts
-
-Read latest ask artifacts from:
-
-```text
-.clue-code/artifacts/ask/codex-*.md
-.clue-code/artifacts/ask/gemini-*.md
-```
-
-### 4. Synthesize
-
-Return one unified answer with:
-
-- Agreed recommendations
-- Conflicting recommendations (explicitly called out)
-- Chosen final direction + rationale
-- Action checklist
-
-## Fallbacks
-
-If one provider is unavailable:
-
-- Continue with available provider + orchestrator synthesis
-- Clearly note missing perspective and risk
-
-If both unavailable:
-
-- Fall back to orchestrator-only answer and state CCG external advisors were unavailable
 
 ## Invocation
 
-```bash
-/clue-code:ccg <task description>
+```
+/clue-code:ccg <task or question>
 ```
 
-Example:
-
-```bash
-/clue-code:ccg Review this PR - architecture/security via Codex and UX/readability via Gemini
-```
+Task: {{range .SkillArgs}}{{.}} {{end}}

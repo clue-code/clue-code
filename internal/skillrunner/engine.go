@@ -30,6 +30,7 @@ type Engine struct {
 	hm     *hooks.Manager
 	skills map[string]*Skill
 	runFn  RunFunc
+	runner Runner
 }
 
 // NewEngine constructs an Engine. hm may be nil for hook-less operation.
@@ -106,7 +107,11 @@ func (e *Engine) Run(ctx context.Context, name string, args []string) (retErr er
 				runErr = fmt.Errorf("skillrunner: skill %q panicked: %v", name, r)
 			}
 		}()
-		runErr = e.runFn(ctx, skill, args)
+		if e.runner != nil {
+			runErr = e.runner.Run(ctx, skill, args)
+		} else {
+			runErr = e.runFn(ctx, skill, args)
+		}
 	}()
 
 	return runErr
@@ -116,6 +121,19 @@ func (e *Engine) Run(ctx context.Context, name string, args []string) (retErr er
 func (e *Engine) WithRunFunc(fn RunFunc) *Engine {
 	e.runFn = fn
 	return e
+}
+
+// WithRunner sets a Runner that takes priority over RunFunc.
+// Use this to wire RealRunner in production.
+func (e *Engine) WithRunner(r Runner) *Engine {
+	e.runner = r
+	return e
+}
+
+// SetSkill registers a skill directly without loading from disk.
+// Useful in tests to inject synthetic skills.
+func (e *Engine) SetSkill(name string, s *Skill) {
+	e.skills[name] = s
 }
 
 // defaultRunFn is a no-op executor. Real skill execution would interpret
