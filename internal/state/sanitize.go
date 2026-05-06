@@ -7,12 +7,14 @@ import (
 	"strings"
 )
 
-// ErrInvalidKey is returned by sanitizeKey when a key would escape its scope
-// root via path traversal, an absolute path, or other unsafe input.
+// ErrInvalidKey is returned by SanitizeKey/SanitizeIdentifier when input
+// would escape its scope root via path traversal, an absolute path, or other
+// unsafe content.
 var ErrInvalidKey = errors.New("state: invalid key")
 
-// sanitizeKey validates and normalizes a state key so it cannot escape the
-// scope root via path traversal.
+// SanitizeKey validates and normalizes a state key so it cannot escape the
+// scope root via path traversal. Used as the canonical sanitizer across
+// internal/* packages that join user-supplied keys into filesystem paths.
 //
 // Allowed: namespace-style keys with forward slashes (e.g. "team/abc/worker/1"),
 // dotted segments (e.g. "config.json"), and Unicode alphanumerics.
@@ -20,7 +22,7 @@ var ErrInvalidKey = errors.New("state: invalid key")
 // segments ("../escape"), and embedded NUL bytes.
 //
 // The returned cleaned form is what callers should use for filesystem joins.
-func sanitizeKey(key string) (string, error) {
+func SanitizeKey(key string) (string, error) {
 	if key == "" {
 		return "", fmt.Errorf("%w: empty key", ErrInvalidKey)
 	}
@@ -49,20 +51,22 @@ func sanitizeKey(key string) (string, error) {
 	return cleaned, nil
 }
 
-// sanitizeSessionID is a stricter validator for session identifiers, which
-// must not contain any path separators or traversal segments at all.
-func sanitizeSessionID(sessionID string) (string, error) {
-	if sessionID == "" {
-		return "", fmt.Errorf("%w: empty sessionID", ErrInvalidKey)
+// SanitizeIdentifier is a stricter validator for flat identifiers (session IDs,
+// skill names, agent names, team names), which must NOT contain any path
+// separators or traversal segments. Use this for any name that becomes a
+// single directory or filename component.
+func SanitizeIdentifier(name string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("%w: empty identifier", ErrInvalidKey)
 	}
-	if strings.ContainsAny(sessionID, "/\\") {
-		return "", fmt.Errorf("%w: sessionID %q contains path separator", ErrInvalidKey, sessionID)
+	if strings.ContainsAny(name, "/\\") {
+		return "", fmt.Errorf("%w: identifier %q contains path separator", ErrInvalidKey, name)
 	}
-	if strings.Contains(sessionID, "..") {
-		return "", fmt.Errorf("%w: sessionID %q contains traversal", ErrInvalidKey, sessionID)
+	if strings.Contains(name, "..") {
+		return "", fmt.Errorf("%w: identifier %q contains traversal", ErrInvalidKey, name)
 	}
-	if strings.ContainsRune(sessionID, 0) {
-		return "", fmt.Errorf("%w: sessionID contains NUL byte", ErrInvalidKey)
+	if strings.ContainsRune(name, 0) {
+		return "", fmt.Errorf("%w: identifier contains NUL byte", ErrInvalidKey)
 	}
-	return sessionID, nil
+	return name, nil
 }

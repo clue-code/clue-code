@@ -248,7 +248,7 @@ func (s *jsonStore) WriteWithRetry(ctx context.Context, key string, value []byte
 }
 
 func (s *jsonStore) Append(_ context.Context, key string, value []byte, scope Scope) error {
-	cleanKey, err := sanitizeKey(key)
+	cleanKey, err := SanitizeKey(key)
 	if err != nil {
 		return err
 	}

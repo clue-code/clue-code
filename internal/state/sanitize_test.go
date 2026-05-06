@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestSanitizeKey(t *testing.T) {
+func TestSanitizeKey_State(t *testing.T) {
 	cases := []struct {
 		name    string
 		input   string
@@ -28,27 +28,27 @@ func TestSanitizeKey(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out, err := sanitizeKey(c.input)
+			out, err := SanitizeKey(c.input)
 			if c.wantErr {
 				if err == nil {
-					t.Errorf("sanitizeKey(%q): want error, got %q", c.input, out)
+					t.Errorf("SanitizeKey(%q): want error, got %q", c.input, out)
 				}
 				if err != nil && !errors.Is(err, ErrInvalidKey) {
-					t.Errorf("sanitizeKey(%q): want ErrInvalidKey, got %v", c.input, err)
+					t.Errorf("SanitizeKey(%q): want ErrInvalidKey, got %v", c.input, err)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("sanitizeKey(%q): unexpected error %v", c.input, err)
+				t.Errorf("SanitizeKey(%q): unexpected error %v", c.input, err)
 			}
 			if out != c.wantOut {
-				t.Errorf("sanitizeKey(%q): got %q, want %q", c.input, out, c.wantOut)
+				t.Errorf("SanitizeKey(%q): got %q, want %q", c.input, out, c.wantOut)
 			}
 		})
 	}
 }
 
-func TestSanitizeSessionID(t *testing.T) {
+func TestSanitizeIdentifier(t *testing.T) {
 	cases := []struct {
 		name    string
 		input   string
@@ -64,12 +64,12 @@ func TestSanitizeSessionID(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := sanitizeSessionID(c.input)
+			_, err := SanitizeIdentifier(c.input)
 			if c.wantErr && err == nil {
-				t.Errorf("sanitizeSessionID(%q): want error, got nil", c.input)
+				t.Errorf("SanitizeIdentifier(%q): want error, got nil", c.input)
 			}
 			if !c.wantErr && err != nil {
-				t.Errorf("sanitizeSessionID(%q): unexpected error %v", c.input, err)
+				t.Errorf("SanitizeIdentifier(%q): unexpected error %v", c.input, err)
 			}
 		})
 	}

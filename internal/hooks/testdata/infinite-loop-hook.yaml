@@ -1,0 +1,5 @@
+events:
+  PreToolUse:
+    - command: "sleep 60"
+      timeout: 200ms
+      blocking: true
