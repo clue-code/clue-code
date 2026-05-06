@@ -6,9 +6,39 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
+
+// reloadHooks holds callbacks registered via RegisterReloadHook.
+// Intentionally package-level so callers (e.g. the token cache) can register
+// without creating an import cycle with internal/tokens.
+var (
+	reloadMu    sync.RWMutex
+	reloadHooks []func(path string)
+)
+
+// RegisterReloadHook registers fn to be called whenever a SKILL.md file is
+// reloaded. fn receives the absolute path of the reloaded file. Safe to call
+// from multiple goroutines.
+func RegisterReloadHook(fn func(path string)) {
+	reloadMu.Lock()
+	reloadHooks = append(reloadHooks, fn)
+	reloadMu.Unlock()
+}
+
+// OnSkillReload invokes all registered reload hooks for the given path.
+// Call this after successfully reloading a skill file.
+func OnSkillReload(path string) {
+	reloadMu.RLock()
+	hooks := make([]func(string), len(reloadHooks))
+	copy(hooks, reloadHooks)
+	reloadMu.RUnlock()
+	for _, fn := range hooks {
+		fn(path)
+	}
+}
 
 // Skill represents a loaded skill with parsed frontmatter and body.
 type Skill struct {
