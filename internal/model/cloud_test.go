@@ -46,9 +46,9 @@ func openAISSEHandler(tokens []string) http.HandlerFunc {
 					{"delta": map[string]any{"content": tok}},
 				},
 			})
-			fmt.Fprintf(w, "data: %s\n\n", payload)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
 		}
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
@@ -285,7 +285,7 @@ func anthropicSSEHandler(tokens []string) http.HandlerFunc {
 
 		writeEvent := func(eventType string, data any) {
 			raw, _ := json.Marshal(data)
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, raw)
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, raw)
 		}
 
 		writeEvent("message_start", map[string]any{

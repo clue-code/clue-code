@@ -28,32 +28,15 @@ func openAIStreamHandler(tokens []string) http.HandlerFunc {
 					{"delta": map[string]any{"content": tok}},
 				},
 			})
-			fmt.Fprintf(w, "data: %s\n\n", payload)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
 		}
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-	}
-}
-
-// openAIResponseHandler serves a canned non-streaming OpenAI-compatible response.
-func openAIResponseHandler(content string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"choices": []map[string]any{
-				{"message": map[string]any{"content": content}},
-			},
-			"usage": map[string]any{
-				"prompt_tokens":     5,
-				"completion_tokens": 3,
-				"total_tokens":      8,
-			},
-		})
 	}
 }
 
@@ -220,7 +203,7 @@ func TestModelFlag_Routing(t *testing.T) {
 		},
 	}
 	// Ensure the deepseek key is NOT set so NewClient would fail if it's picked.
-	os.Unsetenv("DEEPSEEK_UNREACHABLE")
+	_ = os.Unsetenv("DEEPSEEK_UNREACHABLE")
 
 	client, err := model.NewClient(cfg, "anthropic/claude-sonnet-4-6")
 	if err != nil {
@@ -250,7 +233,7 @@ func TestModelFlag_Routing(t *testing.T) {
 // NewClient returns ErrNoAPIKey with the env var name in the message.
 func TestNoAPIKey_ClearError(t *testing.T) {
 	const envVar = "DEEPSEEK_API_KEY_MISSING_TEST"
-	os.Unsetenv(envVar)
+	_ = os.Unsetenv(envVar)
 
 	cfg := &model.Config{
 		DefaultModel: "deepseek-chat",

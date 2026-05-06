@@ -45,6 +45,13 @@ func (c *mlxClient) Provider() string { return "mlx" }
 // startServer launches mlx_lm.server as a subprocess and waits up to 10s for
 // it to become ready (health-checked via GET /v1/models). Callers own the
 // returned cmd's lifecycle.
+//
+// Currently unused — wired by the lazy-start hookpoint planned for Phase
+// 4.5.x dogfood once we have a real MLX-equipped Mac in the loop. Kept
+// here so the contract + Setpgid/WaitDelay/health-check pattern is locked
+// in tests today (mlx_test.go) rather than re-litigated later.
+//
+//nolint:unused // forward-compat: lazy-start hookpoint for Phase 4.5.x
 func (c *mlxClient) startServer(ctx context.Context) (*exec.Cmd, error) {
 	cmd := exec.CommandContext(ctx, c.mc.Bin, "--model", c.mc.ID)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
