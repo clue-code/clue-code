@@ -159,6 +159,14 @@ func (c *httpClient) postJSONWithMiddleware(
 		mw.Budget.Commit(estCostUSD)
 	}
 
+	// Record analytics with estimated input tokens (actual usage parsing happens
+	// in the caller after response decoding; we use the pre-call estimate here).
+	if mw.Analytics != nil && estimatedTokens > 0 {
+		estUsage := tokens.Usage{InputTokens: estimatedTokens}
+		costUSD := tokens.CostUSD(provider, model, estUsage)
+		mw.Analytics.Record(provider, model, estUsage, costUSD)
+	}
+
 	// Store in cache.
 	if mw.Cache != nil && cacheKey != "" {
 		mw.Cache.Put(cacheKey, tokens.Entry{
