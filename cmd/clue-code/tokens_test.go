@@ -22,7 +22,7 @@ func writeLedger(t *testing.T, records []tokens.Record) string {
 	if err != nil {
 		t.Fatalf("writeLedger: create: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	for _, r := range records {
 		if err := enc.Encode(r); err != nil {

@@ -202,7 +202,7 @@ func (b *budget) replayLedger() error {
 		}
 		return fmt.Errorf("open: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	today := b.today()
 	scanner := bufio.NewScanner(f)
