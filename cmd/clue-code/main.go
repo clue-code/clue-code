@@ -18,6 +18,7 @@ Commands:
   state      Read, write, and inspect persistent agent state
   hooks      Manage and inspect lifecycle hooks
   skill      List and run skills
+  chat       Send a prompt to the configured model
   tui        Launch the terminal UI (requires -tags=tui build)
   help       Show this message
 
@@ -44,6 +45,8 @@ func main() {
 		runHooks(args)
 	case "skill":
 		runSkill(args)
+	case "chat":
+		runChat(args)
 	case "tui":
 		os.Exit(runTUI(args))
 	case "help", "-h", "--help":
