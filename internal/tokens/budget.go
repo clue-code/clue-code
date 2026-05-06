@@ -187,7 +187,7 @@ func (b *budget) appendLedger(r ledgerRecord) {
 		slog.Warn("tokens/budget: open ledger", "path", b.ledgerPath, "err", err)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := fmt.Fprintf(f, "%s\n", data); err != nil {
 		slog.Warn("tokens/budget: write ledger", "path", b.ledgerPath, "err", err)
 	}

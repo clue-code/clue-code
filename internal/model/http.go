@@ -39,11 +39,6 @@ func newHTTPClient(endpoint, apiKey string) *httpClient {
 	}
 }
 
-// withMiddleware attaches optional token-engine middleware to the client.
-func (c *httpClient) withMiddleware(mw *Middleware) {
-	c.middleware = mw
-}
-
 // postJSON sends body as JSON POST to c.endpoint, retrying on 5xx up to maxRetries times.
 // Maps 429 to ErrRateLimit and other non-2xx to ErrUpstream. 4xx (except 429) are not retried.
 func (c *httpClient) postJSON(ctx context.Context, body any) ([]byte, error) {

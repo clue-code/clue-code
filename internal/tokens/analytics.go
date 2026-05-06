@@ -114,7 +114,7 @@ func (a *analytics) Record(provider, model string, u Usage, costUSD float64) {
 		slog.Warn("tokens/analytics: open ledger", "path", a.ledgerPath, "err", err)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := fmt.Fprintf(f, "%s\n", data); err != nil {
 		slog.Warn("tokens/analytics: write ledger", "path", a.ledgerPath, "err", err)
 	}
@@ -191,7 +191,7 @@ func (a *analytics) readLedgerSince(since time.Time) []Record {
 		}
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var out []Record
 	scanner := bufio.NewScanner(f)
