@@ -40,10 +40,11 @@ var ModelDefaults = map[Tier]string{
 // Defaults returns a Config populated with safe defaults.
 func Defaults() *Config {
 	return &Config{
-		Mode:            ModeLocal,
-		ModelByTier:     copyModelDefaults(),
-		Telemetry:       false,
-		BudgetUSDPerDay: 5.0,
+		Mode:                ModeLocal,
+		ModelByTier:         copyModelDefaults(),
+		Telemetry:           false,
+		BudgetUSDPerDay:     5.0,
+		TokensEngineEnabled: true,
 	}
 }
 

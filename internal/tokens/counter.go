@@ -18,8 +18,6 @@ package tokens
 import (
 	"fmt"
 	"math"
-
-	"github.com/clue-code/clue-code/internal/model"
 )
 
 // Counter counts tokens for a body of text or a slice of messages.
@@ -29,7 +27,7 @@ type Counter interface {
 
 	// CountMessages returns the token count for a slice of chat messages.
 	// The role label and a small per-message overhead are included.
-	CountMessages(msgs []model.Message, kind TokenizerKind) (int, error)
+	CountMessages(msgs []Message, kind TokenizerKind) (int, error)
 }
 
 // New returns a Counter backed entirely by offline heuristics.
@@ -57,7 +55,7 @@ func (c *counter) Count(text string, kind TokenizerKind) (int, error) {
 // CountMessages returns the approximate token count for a slice of chat messages.
 // Per-message overhead of 4 tokens (role tag + framing) matches the OpenAI
 // cookbook recommendation and is a reasonable proxy for Anthropic as well.
-func (c *counter) CountMessages(msgs []model.Message, kind TokenizerKind) (int, error) {
+func (c *counter) CountMessages(msgs []Message, kind TokenizerKind) (int, error) {
 	if len(msgs) == 0 {
 		return 0, nil
 	}

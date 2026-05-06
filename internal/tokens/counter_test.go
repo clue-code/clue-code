@@ -6,8 +6,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/clue-code/clue-code/internal/model"
 )
 
 func TestCounter_Anthropic_KnownString(t *testing.T) {
@@ -76,7 +74,7 @@ func TestCounter_EmptyAndNil(t *testing.T) {
 
 	// Empty messages slice → 0 tokens.
 	for _, kind := range []TokenizerKind{TokenizerAnthropic, TokenizerOpenAI, TokenizerDeepSeek} {
-		n, err := c.CountMessages([]model.Message{}, kind)
+		n, err := c.CountMessages([]Message{}, kind)
 		if err != nil {
 			t.Errorf("CountMessages([], %s) unexpected error: %v", kind, err)
 		}

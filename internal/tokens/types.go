@@ -24,6 +24,13 @@ const (
 	TokenizerDeepSeek
 )
 
+// Message is a minimal chat message used by CountMessages.
+// It mirrors model.Message but lives here to avoid an import cycle.
+type Message struct {
+	Role    string
+	Content string
+}
+
 // String returns the human-readable name of the tokenizer.
 func (k TokenizerKind) String() string {
 	switch k {

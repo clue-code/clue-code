@@ -20,6 +20,7 @@ Commands:
   skill      List and run skills
   agent      List and invoke agents (list, run, moa)
   chat       Send a prompt to the configured model
+  tokens     Token usage, cost summary, and cache management
   tui        Launch the terminal UI (requires -tags=tui build)
   help       Show this message
 
@@ -50,6 +51,8 @@ func main() {
 		runAgent(args)
 	case "chat":
 		runChat(args)
+	case "tokens":
+		runTokens(args)
 	case "tui":
 		os.Exit(runTUI(args))
 	case "help", "-h", "--help":
