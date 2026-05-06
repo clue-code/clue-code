@@ -207,7 +207,7 @@ func TestDispatcher_StreamsToOut(t *testing.T) {
 	i1 := indexOf(got, "chunk1")
 	i2 := indexOf(got, "chunk2")
 	i3 := indexOf(got, "chunk3")
-	if !(i1 < i2 && i2 < i3) {
+	if i1 >= i2 || i2 >= i3 {
 		t.Errorf("chunks out of order in %q", got)
 	}
 }
