@@ -5,10 +5,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/clue-code/clue-code/internal/hooks"
+	"github.com/clue-code/clue-code/internal/model"
 	"github.com/clue-code/clue-code/internal/skillrunner"
+	"github.com/clue-code/clue-code/internal/state"
 )
 
 const skillUsage = `Usage: clue-code skill <subcommand> [flags]
@@ -78,6 +82,12 @@ func runSkillList(args []string) {
 }
 
 func runSkillRun(args []string) {
+	// Install signal handler FIRST so SIGINT during init still triggers
+	// graceful cancellation rather than killing the process before defers run
+	// (G5 acceptance: Stop hook must fire on Ctrl-C).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	fs := flag.NewFlagSet("skill run", flag.ExitOnError)
 	skillsDir := fs.String("skills-dir", "skills", "directory containing skill subdirectories")
 	fs.Usage = func() {
@@ -88,19 +98,19 @@ func runSkillRun(args []string) {
 
 	rest := fs.Args()
 	if len(rest) == 0 {
-		fmt.Fprintln(os.Stderr, "skill run: skill name required")
+		fmt.Fprintln(os.Stderr, "skill run: skill name required\nusage: skill run requires at least one argument")
 		fs.Usage()
 		os.Exit(2)
 	}
 	name, skillArgs := rest[0], rest[1:]
 
-	cfg, err := hooks.LoadConfig()
+	hooksCfg, err := hooks.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "skill run: load hooks config: %v\n", err)
 		os.Exit(1)
 	}
 
-	mgr, err := hooks.NewManager(cfg, ".")
+	mgr, err := hooks.NewManager(hooksCfg, ".")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "skill run: new hooks manager: %v\n", err)
 		os.Exit(1)
@@ -112,7 +122,28 @@ func runSkillRun(args []string) {
 		fmt.Fprintf(os.Stderr, "skill run: load warnings: %v\n", loadErr)
 	}
 
-	if err := eng.Run(context.Background(), name, skillArgs); err != nil {
+	// Wire RealRunner when a model client is available.
+	// If the API key is missing the engine falls back to the default no-op runner,
+	// which allows skills like cancel to execute without requiring a model.
+	modelCfg, modelErr := model.LoadConfig()
+	if modelErr != nil {
+		fmt.Fprintf(os.Stderr, "skill run: load model config: %v\n", modelErr)
+		os.Exit(1)
+	}
+	client, clientErr := model.NewClient(modelCfg, modelCfg.DefaultModel)
+	if clientErr == nil {
+		store, storeErr := state.Open(fmt.Sprintf("skill-%s", name))
+		if storeErr != nil {
+			fmt.Fprintf(os.Stderr, "skill run: open state store: %v\n", storeErr)
+			os.Exit(1)
+		}
+		runner := skillrunner.NewRealRunner(client, store, mgr, os.Stdout)
+		eng.WithRunner(runner)
+	} else {
+		fmt.Fprintf(os.Stderr, "skill run: model unavailable (%v); running in offline mode\n", clientErr)
+	}
+
+	if err := eng.Run(ctx, name, skillArgs); err != nil {
 		fmt.Fprintf(os.Stderr, "skill run: %v\n", err)
 		os.Exit(1)
 	}
