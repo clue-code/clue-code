@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/clue-code/clue-code/internal/tokens"
 )
 
 const (
@@ -22,9 +24,10 @@ var retryDelays = []time.Duration{200 * time.Millisecond, 600 * time.Millisecond
 
 // httpClient is the shared base for HTTP-based providers.
 type httpClient struct {
-	endpoint string
-	apiKey   string
-	hc       *http.Client
+	endpoint   string
+	apiKey     string
+	hc         *http.Client
+	middleware *Middleware
 }
 
 // newHTTPClient constructs an httpClient with a 60s default timeout.
@@ -98,6 +101,76 @@ func (c *httpClient) postJSON(ctx context.Context, body any) ([]byte, error) {
 	}
 
 	return nil, lastErr
+}
+
+// postJSONWithMiddleware wraps postJSON with optional token-engine hooks:
+//   - Cache: return cached payload on hit (no HTTP roundtrip)
+//   - Budget: reserve estimated cost before POST; commit actual cost after
+//   - Analytics: record actual usage after POST
+//
+// provider/model/cacheKey are used only when middleware is non-nil.
+// If middleware is nil this is identical to postJSON.
+func (c *httpClient) postJSONWithMiddleware(
+	ctx context.Context,
+	body any,
+	provider, model, cacheKey string,
+	estimatedTokens int,
+) ([]byte, error) {
+	mw := c.middleware
+	if mw == nil {
+		return c.postJSON(ctx, body)
+	}
+
+	// --- Cache check ---
+	if mw.Cache != nil && cacheKey != "" {
+		if entry, ok := mw.Cache.Get(cacheKey); ok {
+			return entry.Payload, nil
+		}
+	}
+
+	// --- Budget reservation ---
+	var estCostUSD float64
+	if mw.Budget != nil && estimatedTokens > 0 {
+		estCostUSD = tokens.CostUSD(provider, model, tokens.Usage{InputTokens: estimatedTokens})
+		if err := mw.Budget.CheckAndReserve(estCostUSD); err != nil {
+			return nil, fmt.Errorf("model: %w", err)
+		}
+	}
+
+	// --- Actual HTTP call ---
+	data, err := c.postJSON(ctx, body)
+	if err != nil {
+		// Release budget reservation on failure (commit 0).
+		if mw.Budget != nil && estCostUSD > 0 {
+			mw.Budget.Commit(0)
+		}
+		return nil, err
+	}
+
+	// --- Post-call: commit budget + record analytics ---
+	// We rely on the caller to parse actual usage; here we commit estCost as
+	// an approximation. Callers that have actual usage should call Commit themselves.
+	if mw.Budget != nil && estCostUSD > 0 {
+		mw.Budget.Commit(estCostUSD)
+	}
+
+	// Record analytics with estimated input tokens (actual usage parsing happens
+	// in the caller after response decoding; we use the pre-call estimate here).
+	if mw.Analytics != nil && estimatedTokens > 0 {
+		estUsage := tokens.Usage{InputTokens: estimatedTokens}
+		costUSD := tokens.CostUSD(provider, model, estUsage)
+		mw.Analytics.Record(provider, model, estUsage, costUSD)
+	}
+
+	// Store in cache.
+	if mw.Cache != nil && cacheKey != "" {
+		mw.Cache.Put(cacheKey, tokens.Entry{
+			Key:     cacheKey,
+			Payload: data,
+		})
+	}
+
+	return data, nil
 }
 
 // postSSE sends body as JSON POST and returns a channel of Chunks parsed from

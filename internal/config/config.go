@@ -26,6 +26,14 @@ type Config struct {
 
 	// Telemetry, when true, enables anonymous usage metrics.
 	Telemetry bool `yaml:"telemetry"`
+
+	// BudgetUSDPerDay is the maximum USD spend allowed per calendar day across
+	// all model calls. 0 disables the budget check. Default: 5.0.
+	BudgetUSDPerDay float64 `json:"budget_usd_per_day" yaml:"budget_usd_per_day"`
+
+	// TokensEngineEnabled activates the token counter/cache/budget middleware in
+	// the model HTTP layer. Defaults to true; set to false for rollback.
+	TokensEngineEnabled bool `json:"tokens_engine_enabled" yaml:"tokens_engine_enabled"`
 }
 
 // ConfigPath returns the standard config file location.

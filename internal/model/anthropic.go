@@ -8,9 +8,15 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/clue-code/clue-code/internal/tokens"
 )
 
 const anthropicVersion = "2023-06-01"
+
+// cacheControlSystemThreshold is the token count above which cache_control:ephemeral
+// is injected into the Anthropic system prompt block.
+const cacheControlSystemThreshold = 1024
 
 func init() {
 	RegisterProvider("anthropic", func(mc ModelConfig, apiKey string) (Client, error) {
@@ -31,20 +37,34 @@ func init() {
 }
 
 type anthropicClient struct {
-	hc       *http.Client
-	endpoint string
-	apiKey   string
-	modelID  string
+	hc         *http.Client
+	endpoint   string
+	apiKey     string
+	modelID    string
+	middleware *Middleware
 }
 
 func (c *anthropicClient) Provider() string { return "anthropic" }
 
+// anthropicSystemBlock is a system prompt block, optionally with cache_control.
+type anthropicSystemBlock struct {
+	Type         string                 `json:"type"`
+	Text         string                 `json:"text"`
+	CacheControl *anthropicCacheControl `json:"cache_control,omitempty"`
+}
+
+// anthropicCacheControl is the cache_control annotation for Anthropic prompt caching.
+type anthropicCacheControl struct {
+	Type string `json:"type"`
+}
+
 // anthropicRequest is the Anthropic Messages API request body.
 type anthropicRequest struct {
-	Model     string    `json:"model"`
-	Messages  []Message `json:"messages"`
-	MaxTokens int       `json:"max_tokens"`
-	Stream    bool      `json:"stream,omitempty"`
+	Model     string                 `json:"model"`
+	System    []anthropicSystemBlock `json:"system,omitempty"`
+	Messages  []Message              `json:"messages"`
+	MaxTokens int                    `json:"max_tokens"`
+	Stream    bool                   `json:"stream,omitempty"`
 }
 
 // anthropicResponse is the non-streaming Anthropic Messages API response.
@@ -68,9 +88,32 @@ func (c *anthropicClient) buildRequest(ctx context.Context, req ChatRequest, str
 	if maxTok == 0 {
 		maxTok = 8192
 	}
+
+	// Separate system messages from conversation messages.
+	// Anthropic requires system to be a top-level field (not in messages[]).
+	var systemBlocks []anthropicSystemBlock
+	var convMsgs []Message
+	for _, m := range req.Messages {
+		if m.Role == RoleSystem {
+			block := anthropicSystemBlock{Type: "text", Text: m.Content}
+			// Inject cache_control:ephemeral if system prompt exceeds threshold
+			// and the token counter middleware is available.
+			if c.middleware != nil && c.middleware.Counter != nil {
+				n, err := c.middleware.Counter.Count(m.Content, tokens.TokenizerAnthropic)
+				if err == nil && n > cacheControlSystemThreshold {
+					block.CacheControl = &anthropicCacheControl{Type: "ephemeral"}
+				}
+			}
+			systemBlocks = append(systemBlocks, block)
+		} else {
+			convMsgs = append(convMsgs, m)
+		}
+	}
+
 	body := anthropicRequest{
 		Model:     req.Model,
-		Messages:  req.Messages,
+		System:    systemBlocks,
+		Messages:  convMsgs,
 		MaxTokens: maxTok,
 		Stream:    stream,
 	}
