@@ -69,7 +69,7 @@ func runTokensSummary() {
 	report := a.Summary(24 * time.Hour)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "Provider\tModel\tTokens\tUSD")
+	writeln(w, "Provider\tModel\tTokens\tUSD")
 
 	// Collect per-model rows. Analytics only exposes ByModel (keyed by model
 	// name) and ByProvider, so we emit one row per model with its USD cost.
@@ -77,11 +77,11 @@ func runTokensSummary() {
 	// the total token count only on the TOTAL line.
 	for model, usd := range report.ByModel {
 		provider := providerForModel(report, model)
-		fmt.Fprintf(w, "%s\t%s\t—\t$%.2f\n", provider, model, usd)
+		writef(w, "%s\t%s\t—\t$%.2f\n", provider, model, usd)
 	}
 
-	fmt.Fprintln(w, "────────────────────────────────────────")
-	fmt.Fprintf(w, "TOTAL\t\t%s\t$%.2f\n", formatTokens(report.TotalTokens), report.TotalUSD)
+	writeln(w, "────────────────────────────────────────")
+	writef(w, "TOTAL\t\t%s\t$%.2f\n", formatTokens(report.TotalTokens), report.TotalUSD)
 	_ = w.Flush()
 }
 
@@ -100,9 +100,9 @@ func runTokensTop() {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "Provider\tModel\tUSD")
+	writeln(w, "Provider\tModel\tUSD")
 	for _, e := range entries {
-		fmt.Fprintf(w, "%s\t%s\t$%.4f\n", e.Provider, e.Model, e.CostUSD)
+		writef(w, "%s\t%s\t$%.4f\n", e.Provider, e.Model, e.CostUSD)
 	}
 	_ = w.Flush()
 }
@@ -145,6 +145,16 @@ func formatTokens(n int) string {
 		return fmt.Sprintf("%.1fK", float64(n)/1_000)
 	}
 	return fmt.Sprintf("%d", n)
+}
+
+// writeln writes s followed by a newline to w, discarding the error.
+// text/tabwriter writes realistically never fail; silencing the error here
+// satisfies errcheck without obscuring real I/O failures.
+func writeln(w *tabwriter.Writer, s string) { _, _ = fmt.Fprintln(w, s) }
+
+// writef writes a formatted string to w, discarding the error (see writeln).
+func writef(w *tabwriter.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
 }
 
 // providerForModel returns the provider name for a given model from the report's
