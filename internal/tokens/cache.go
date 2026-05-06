@@ -23,7 +23,7 @@ import (
 type Entry struct {
 	Key         string    `json:"key"`
 	Usage       Usage     `json:"usage"`
-	Payload     []byte    `json:"payload"`      // serialized response (opaque to cache)
+	Payload     []byte    `json:"payload"` // serialized response (opaque to cache)
 	CreatedAt   time.Time `json:"created_at"`
 	SourcePath  string    `json:"source_path"`  // optional: SKILL.md path for mtime invalidation
 	SourceMtime time.Time `json:"source_mtime"` // mtime recorded at Put time

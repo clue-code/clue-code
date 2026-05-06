@@ -3,10 +3,10 @@ package tokens
 // Usage holds token consumption for a single request, including prompt-cache
 // fields reported by Anthropic's API (Phase 4.8 token engine, I1).
 type Usage struct {
-	InputTokens       int
-	OutputTokens      int
-	CacheReadTokens   int
-	CacheWriteTokens  int
+	InputTokens      int
+	OutputTokens     int
+	CacheReadTokens  int
+	CacheWriteTokens int
 }
 
 // TokenizerKind identifies which tokenizer strategy to apply.

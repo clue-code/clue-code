@@ -10,10 +10,10 @@ package tokens
 
 // modelPricing holds per-million-token USD rates for one model.
 type modelPricing struct {
-	InputPer1M       float64
-	OutputPer1M      float64
-	CacheReadPer1M   float64
-	CacheWritePer1M  float64
+	InputPer1M      float64
+	OutputPer1M     float64
+	CacheReadPer1M  float64
+	CacheWritePer1M float64
 }
 
 // pricingTable maps provider → model → rates.
@@ -31,12 +31,12 @@ var pricingTable = map[string]map[string]modelPricing{
 	},
 	"deepseek": {
 		// deepseek-chat (DeepSeek-V3): $0.14 input / $0.28 output per 1M tokens
-		"deepseek-chat":    {InputPer1M: 0.14, OutputPer1M: 0.28, CacheReadPer1M: 0.014, CacheWritePer1M: 0.14},
-		"deepseek-v3":      {InputPer1M: 0.14, OutputPer1M: 0.28, CacheReadPer1M: 0.014, CacheWritePer1M: 0.14},
-		"deepseek-v3.2":    {InputPer1M: 0.14, OutputPer1M: 0.28, CacheReadPer1M: 0.014, CacheWritePer1M: 0.14},
+		"deepseek-chat": {InputPer1M: 0.14, OutputPer1M: 0.28, CacheReadPer1M: 0.014, CacheWritePer1M: 0.14},
+		"deepseek-v3":   {InputPer1M: 0.14, OutputPer1M: 0.28, CacheReadPer1M: 0.014, CacheWritePer1M: 0.14},
+		"deepseek-v3.2": {InputPer1M: 0.14, OutputPer1M: 0.28, CacheReadPer1M: 0.014, CacheWritePer1M: 0.14},
 		// deepseek-reasoner (R1)
 		"deepseek-reasoner": {InputPer1M: 0.55, OutputPer1M: 2.19, CacheReadPer1M: 0.055, CacheWritePer1M: 0.55},
-		"deepseek-r1":        {InputPer1M: 0.55, OutputPer1M: 2.19, CacheReadPer1M: 0.055, CacheWritePer1M: 0.55},
+		"deepseek-r1":       {InputPer1M: 0.55, OutputPer1M: 2.19, CacheReadPer1M: 0.055, CacheWritePer1M: 0.55},
 	},
 	"openai": {
 		// gpt-4o

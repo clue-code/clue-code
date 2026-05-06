@@ -59,9 +59,9 @@ type Analytics interface {
 
 // analytics is the concrete implementation of Analytics.
 type analytics struct {
-	mu          sync.Mutex
-	ledgerPath  string
-	clk         clock.Clock
+	mu         sync.Mutex
+	ledgerPath string
+	clk        clock.Clock
 }
 
 // NewAnalytics returns an Analytics backed by a JSONL ledger at ledgerPath.

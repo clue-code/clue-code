@@ -46,20 +46,20 @@ type Budget interface {
 
 // ledgerRecord is one line in the JSONL ledger file.
 type ledgerRecord struct {
-	TS       time.Time `json:"ts"`
-	Type     string    `json:"type"` // "reserve" | "commit"
-	USD      float64   `json:"usd"`
+	TS   time.Time `json:"ts"`
+	Type string    `json:"type"` // "reserve" | "commit"
+	USD  float64   `json:"usd"`
 }
 
 // budget is the concrete implementation of Budget.
 type budget struct {
-	mu          sync.Mutex
-	dailyLimit  float64
-	spent       float64 // reconciled (committed) spend today
-	reserved    float64 // pending reservations not yet committed
-	lastReset   string  // YYYY-MM-DD of last reset
-	ledgerPath  string
-	clk         clock.Clock
+	mu         sync.Mutex
+	dailyLimit float64
+	spent      float64 // reconciled (committed) spend today
+	reserved   float64 // pending reservations not yet committed
+	lastReset  string  // YYYY-MM-DD of last reset
+	ledgerPath string
+	clk        clock.Clock
 }
 
 // NewBudget returns a Budget that enforces dailyLimitUSD per calendar day.

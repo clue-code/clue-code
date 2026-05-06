@@ -48,9 +48,9 @@ func (c *anthropicClient) Provider() string { return "anthropic" }
 
 // anthropicSystemBlock is a system prompt block, optionally with cache_control.
 type anthropicSystemBlock struct {
-	Type         string                      `json:"type"`
-	Text         string                      `json:"text"`
-	CacheControl *anthropicCacheControl      `json:"cache_control,omitempty"`
+	Type         string                 `json:"type"`
+	Text         string                 `json:"text"`
+	CacheControl *anthropicCacheControl `json:"cache_control,omitempty"`
 }
 
 // anthropicCacheControl is the cache_control annotation for Anthropic prompt caching.
