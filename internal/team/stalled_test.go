@@ -87,15 +87,26 @@ func TestStalledTeamDetector(t *testing.T) {
 		t.Error("mailbox_depths should be present in payload")
 	}
 
-	// Goroutine leak check: Close must drain the detector goroutine.
+	// Goroutine leak check: snapshot BEFORE Close (not after), then assert
+	// count is back to <= baseline after Close drains the detector goroutine.
+	// Snapshotting before TeamCreate would be more accurate, but the team and
+	// detector are already running at this point. We instead take the snapshot
+	// immediately before Close, then verify that Close did not leak: after GC
+	// settle the count must be <= before. This pattern is stable in full
+	// parallel suite (go test -race ./...) because other packages' goroutines
+	// are already counted in the "before" baseline — only our goroutine delta
+	// matters.
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond) // settle scheduler noise
 	before := runtime.NumGoroutine()
 	if err := tm.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	time.Sleep(100 * time.Millisecond)
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond) // settle detector exit
 	after := runtime.NumGoroutine()
 	if after > before {
-		t.Errorf("goroutine leak: before Close=%d, after=%d", before, after)
+		t.Errorf("goroutine leak: before Close=%d, after=%d (detector goroutine not drained)", before, after)
 	}
 }
 

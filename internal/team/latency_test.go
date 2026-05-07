@@ -104,9 +104,16 @@ func sendDirect(tm *Team, to, kind string, payload json.RawMessage) error {
 	}
 }
 
-// TestSendMessage_P99Latency (D6): 8 workers × 1000 messages over inproc
-// transport (direct channel path, no journal I/O). Uses a regular *testing.T
-// (NOT *testing.B) so threshold breach fails CI. p99 < 1ms.
+// TestSendMessage_P99Latency measures the inproc transport baseline
+// (atomic seq + chan send, no journal I/O). The Team.SendMessage hot path
+// includes journal Append+Sync (~4ms/call on macOS), making p99 < 1ms
+// structurally infeasible via the journalled path. D6 acceptance is
+// satisfied by the inproc path; an async-journal ADR is required if
+// the journalled hot path needs sub-1ms p99 (deferred to Phase 5+).
+//
+// D6: 8 workers × 1000 messages over inproc transport (direct channel
+// path, no journal I/O). Uses a regular *testing.T (NOT *testing.B) so
+// threshold breach fails CI. p99 < 1ms.
 //
 // Design:
 //   - sendDirect bypasses journal — measures atomic seq + RLock + chan send

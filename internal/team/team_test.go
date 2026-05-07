@@ -262,6 +262,48 @@ func TestRebuildFromJournalAlone(t *testing.T) {
 	}
 }
 
+// TestUnsupportedEnvelopeVersion_OpenPath (D11): team.Open() must propagate
+// ErrUnsupportedEnvelopeVersion when the journal contains an unknown envelope
+// version. This exercises the Open() → journal.Read() error path, distinct
+// from the journal.Read()-direct path tested in TestUnsupportedEnvelopeVersion.
+func TestUnsupportedEnvelopeVersion_OpenPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	const teamID = "team-v99-open"
+	teamDir := filepath.Join(dir, ".clue-code", "teams", teamID)
+	if err := os.MkdirAll(teamDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	jPath := filepath.Join(teamDir, "journal.ndjson")
+
+	// Write a valid v=1 envelope followed by a v=99 (unsupported) envelope.
+	type rawEnv struct {
+		V    uint8  `json:"v"`
+		Seq  uint64 `json:"seq"`
+		From string `json:"from"`
+		To   string `json:"to"`
+		Kind string `json:"kind"`
+		Ts   string `json:"ts"`
+	}
+	good, _ := json.Marshal(rawEnv{V: 1, Seq: 0, From: teamID, To: teamID, Kind: "team-create", Ts: "2026-05-06T00:00:00Z"})
+	bad, _ := json.Marshal(rawEnv{V: 99, Seq: 1, From: "a", To: "b", Kind: "bad", Ts: "2026-05-06T00:00:00Z"})
+	content := append(good, '\n')
+	content = append(content, bad...)
+	content = append(content, '\n')
+	if err := os.WriteFile(jPath, content, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := Open(teamID, dir)
+	if err == nil {
+		t.Fatal("Open: expected error for unsupported envelope version, got nil")
+	}
+	if !isUnsupportedVersionErr(err) {
+		t.Errorf("Open: expected ErrUnsupportedEnvelopeVersion in error chain, got: %v", err)
+	}
+}
+
 // workerLabel returns a deterministic worker ID for test index i.
 func workerLabel(i int) string {
 	return "worker-" + string(rune('0'+i))
