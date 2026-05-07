@@ -79,6 +79,52 @@ type persistConfig struct {
 	Mode string `json:"mode"`
 }
 
+// ProviderKeys holds API keys read from config.json.
+// Keys are set by ConfigureAnthropic / ConfigureDeepSeek in the setup wizard.
+// DefaultProvider is "anthropic" or "deepseek" depending on what was last configured.
+type ProviderKeys struct {
+	AnthropicAPIKey string
+	DeepSeekAPIKey  string
+	DefaultProvider string
+	Mode            Mode
+}
+
+// LoadJSONConfig reads config.json at path and returns the persisted provider
+// keys and mode. Returns a zero-value ProviderKeys (no error) if the file does
+// not exist, so callers degrade gracefully when no wizard has been run.
+func LoadJSONConfig(path string) (ProviderKeys, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ProviderKeys{}, nil
+		}
+		return ProviderKeys{}, fmt.Errorf("config: read %s: %w", path, err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return ProviderKeys{}, fmt.Errorf("config: parse %s: %w", path, err)
+	}
+
+	pk := ProviderKeys{}
+	if v, ok := raw["anthropic_api_key"].(string); ok {
+		pk.AnthropicAPIKey = v
+	}
+	if v, ok := raw["deepseek_api_key"].(string); ok {
+		pk.DeepSeekAPIKey = v
+	}
+	if v, ok := raw["default_provider"].(string); ok {
+		pk.DefaultProvider = v
+	}
+	if v, ok := raw["mode"].(string); ok {
+		switch Mode(v) {
+		case ModeLocal, ModeCloud, ModeHybrid:
+			pk.Mode = Mode(v)
+		}
+	}
+	return pk, nil
+}
+
 // SaveMode persists mode to the JSON config file at path.
 // The directory is created if it does not exist.
 func SaveMode(path string, mode Mode) error {

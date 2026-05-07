@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/clue-code/clue-code/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,6 +54,8 @@ func configPath() (string, error) {
 
 // LoadConfig reads ~/.config/clue-code/config.yaml.
 // If the file does not exist, a minimal default config is returned.
+// It also merges API keys persisted in config.json by the setup wizard so that
+// users who ran 'clue-code setup' do not need to export env vars manually.
 func LoadConfig() (*Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -62,7 +65,9 @@ func LoadConfig() (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return defaultConfig(), nil
+			cfg := defaultConfig()
+			mergeJSONConfigKeys(cfg)
+			return cfg, nil
 		}
 		return nil, fmt.Errorf("model: read config: %w", err)
 	}
@@ -76,7 +81,87 @@ func LoadConfig() (*Config, error) {
 		cfg.DefaultModel = cfg.Models[0].ID
 	}
 
+	mergeJSONConfigKeys(&cfg)
 	return &cfg, nil
+}
+
+// mergeJSONConfigKeys reads config.json and injects persisted API keys into
+// the Config so that factory.NewClient can use them without requiring env vars.
+// Priority follows the 12-factor app convention: env var > config.json > error.
+// An environment variable that is already set is never overwritten.
+func mergeJSONConfigKeys(cfg *Config) {
+	jsonPath, err := config.JSONConfigPath()
+	if err != nil {
+		return // non-fatal: env-only users still work
+	}
+	pk, err := config.LoadJSONConfig(jsonPath)
+	if err != nil {
+		return // non-fatal
+	}
+
+	// Map provider name → key from config.json
+	jsonKeys := map[string]string{}
+	if pk.AnthropicAPIKey != "" {
+		jsonKeys["anthropic"] = pk.AnthropicAPIKey
+	}
+	if pk.DeepSeekAPIKey != "" {
+		jsonKeys["deepseek"] = pk.DeepSeekAPIKey
+	}
+
+	// Inject anthropic model if wizard set default_provider=anthropic but no
+	// anthropic model exists in config.yaml yet (covers fresh install scenario).
+	if pk.DefaultProvider == "anthropic" && pk.AnthropicAPIKey != "" {
+		hasAnthropic := false
+		for i := range cfg.Models {
+			if cfg.Models[i].Provider == "anthropic" {
+				hasAnthropic = true
+				break
+			}
+		}
+		if !hasAnthropic {
+			cfg.Models = append(cfg.Models, ModelConfig{
+				ID:        "anthropic/claude-sonnet-4-6",
+				Provider:  "anthropic",
+				Endpoint:  "https://api.anthropic.com/v1",
+				MaxTokens: 8192,
+			})
+			cfg.DefaultModel = "anthropic/claude-sonnet-4-6"
+		}
+	}
+
+	// For each model entry: if its provider has a key in config.json,
+	// store that key via a synthetic env var so NewClient can pick it up.
+	// We use os.Setenv only if the var is currently empty (env wins if set).
+	for i := range cfg.Models {
+		mc := &cfg.Models[i]
+		key, hasKey := jsonKeys[mc.Provider]
+		if !hasKey || key == "" {
+			continue
+		}
+		// If no APIKeyEnv is set on this entry, create a synthetic one.
+		if mc.APIKeyEnv == "" {
+			syntheticEnv := "CLUE_CODE_" + upperProvider(mc.Provider) + "_API_KEY"
+			mc.APIKeyEnv = syntheticEnv
+		}
+		// Only inject if current env value is empty (preserves user's exported var).
+		if os.Getenv(mc.APIKeyEnv) == "" {
+			_ = os.Setenv(mc.APIKeyEnv, key)
+		}
+	}
+}
+
+// upperProvider returns a simple uppercase version of a provider name for use
+// in synthetic env var names (e.g. "anthropic" → "ANTHROPIC").
+func upperProvider(s string) string {
+	b := make([]byte, len(s))
+	for i := range s {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			c -= 32
+		}
+		b[i] = c
+	}
+	return string(b)
 }
 
 // FindModel returns the ModelConfig for the given id.
