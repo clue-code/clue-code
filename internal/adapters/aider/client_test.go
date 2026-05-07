@@ -56,6 +56,36 @@ func TestClient_Apply_Crash(t *testing.T) {
 	}
 }
 
+// TestClient_Apply_Success verifies the happy path: a fake aider script that
+// exits 0 and emits "Edited file: foo.go\n" causes Apply to return success
+// and ParseAiderOutput to extract ["foo.go"].
+func TestClient_Apply_Success(t *testing.T) {
+	dir := t.TempDir()
+	// Fake aider: exit 0, print an "Edited file:" marker to stdout.
+	script := "#!/bin/sh\necho 'Edited file: foo.go'\nexit 0\n"
+	binPath := filepath.Join(dir, "aider")
+	if err := os.WriteFile(binPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake aider: %v", err)
+	}
+
+	c := &Client{
+		available: true,
+		binPath:   binPath,
+		version:   "fake 0.0.0",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filesChanged, _, err := c.Apply(ctx, "add a comment", dir)
+	if err != nil {
+		t.Fatalf("Apply returned unexpected error: %v", err)
+	}
+	if len(filesChanged) != 1 || filesChanged[0] != "foo.go" {
+		t.Fatalf("expected filesChanged=[\"foo.go\"], got %v", filesChanged)
+	}
+}
+
 // writeFakeAider writes a shell script to dir that exits with exitCode and
 // prints output to stderr, then returns its path.
 func writeFakeAider(t *testing.T, dir string, exitCode int, output string) string {

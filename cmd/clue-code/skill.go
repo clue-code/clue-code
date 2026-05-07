@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/clue-code/clue-code/internal/adapters/aider"
 	"github.com/clue-code/clue-code/internal/hooks"
 	"github.com/clue-code/clue-code/internal/model"
 	"github.com/clue-code/clue-code/internal/skillrunner"
@@ -90,6 +91,7 @@ func runSkillRun(args []string) {
 
 	fs := flag.NewFlagSet("skill run", flag.ExitOnError)
 	skillsDir := fs.String("skills-dir", "skills", "directory containing skill subdirectories")
+	useAider := fs.Bool("use-aider", false, "apply edits via the aider AI coding assistant when available (falls back to default edit logic when aider is not installed)")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: clue-code skill run [flags] <name> [args...]\n\nRun a named skill.")
 		fs.PrintDefaults()
@@ -120,6 +122,20 @@ func runSkillRun(args []string) {
 	eng := skillrunner.NewEngine(mgr)
 	if loadErr := eng.Load(*skillsDir); loadErr != nil {
 		fmt.Fprintf(os.Stderr, "skill run: load warnings: %v\n", loadErr)
+	}
+
+	// When --use-aider is requested, probe for the aider binary.
+	// Available()=false is non-fatal: the warning is already emitted by
+	// NewClient via slog.Warn and execution continues with the default runner.
+	var aiderClient *aider.Client
+	if *useAider {
+		aiderClient = aider.NewClient()
+		if aiderClient.Available() {
+			repoRoot, _ := os.Getwd()
+			eng.WithAiderApply(func(instruction string) ([]string, string, error) {
+				return aiderClient.Apply(ctx, instruction, repoRoot)
+			})
+		}
 	}
 
 	// Wire RealRunner when a model client is available.

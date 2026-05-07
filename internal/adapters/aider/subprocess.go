@@ -45,10 +45,18 @@ func runAider(ctx context.Context, binPath, repoRoot, instruction string) (outpu
 		return nil, fmt.Errorf("aider: start failed: %w", startErr)
 	}
 
+	// processDone is closed by the single cmd.Wait() call on the main path
+	// below. The escalation goroutine selects on this channel instead of
+	// calling Process.Wait() itself — on POSIX only one waiter per process is
+	// allowed, so a second concurrent Wait produces undefined behaviour.
+	processDone := make(chan struct{})
+
 	// Escalation goroutine: SIGTERM → (3 s) → SIGKILL.
-	done := make(chan struct{})
+	// It never calls cmd.Wait() or cmd.Process.Wait(); it relies solely on
+	// processDone which is closed by the single authoritative Wait below.
+	escalationDone := make(chan struct{})
 	go func() {
-		defer close(done)
+		defer close(escalationDone)
 		select {
 		case <-ctx.Done():
 			// Send SIGTERM first for a graceful shutdown.
@@ -59,16 +67,19 @@ func runAider(ctx context.Context, binPath, repoRoot, instruction string) (outpu
 			select {
 			case <-timer.C:
 				_ = sendSignal(cmd.Process, sigKillSignal)
-			case <-waitDone(cmd):
+			case <-processDone:
 				// Process already exited — nothing to kill.
 			}
-		case <-waitDone(cmd):
+		case <-processDone:
 			// Normal exit before context cancellation.
 		}
 	}()
 
+	// Single authoritative Wait. Closing processDone unblocks the escalation
+	// goroutine so it can exit cleanly.
 	waitErr := cmd.Wait()
-	<-done // Ensure the goroutine has exited before we return.
+	close(processDone)
+	<-escalationDone // Ensure the goroutine has exited before we return.
 
 	if waitErr != nil {
 		stderrStr := stderr.String()
@@ -79,19 +90,4 @@ func runAider(ctx context.Context, binPath, repoRoot, instruction string) (outpu
 	}
 
 	return stdout.Bytes(), nil
-}
-
-// waitDone returns a channel that is closed when cmd's process exits.
-// This is a lightweight helper to avoid blocking the escalation goroutine.
-func waitDone(cmd *exec.Cmd) <-chan struct{} {
-	ch := make(chan struct{})
-	go func() {
-		// ProcessState is set by cmd.Wait(); we poll Process.Wait here to get
-		// an independent signal. Errors are intentionally ignored.
-		if cmd.Process != nil {
-			_, _ = cmd.Process.Wait()
-		}
-		close(ch)
-	}()
-	return ch
 }

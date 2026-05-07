@@ -127,3 +127,42 @@ The following settings in `clue-code.yaml` control this skill:
 If autopilot was cancelled or failed, invoke the skill again with the same task
 to resume from the last completed phase.
 </configuration>
+
+<aider_integration>
+## Aider integration
+
+Autopilot can delegate file edits to the [Aider](https://aider.chat) AI coding
+assistant when it is installed on the system.
+
+### Enabling
+
+Pass `--use-aider` to `skill run`:
+
+```
+clue-code skill run --use-aider autopilot "add error handling to pkg/foo"
+```
+
+### Behaviour
+
+- At startup, `skill run` calls `aider.NewClient()` which probes `PATH` for the
+  `aider` binary and captures its version via `aider --version`.
+- If `Available()` returns `true`, the engine is wired with an `AiderApplyFunc`
+  callback.  Whenever the skill produces an edit instruction the callback
+  invokes `aider --no-auto-commit --yes --message <instruction>` inside the
+  current working directory.
+- If `Available()` returns `false` (binary not found), a `slog.Warn` is emitted
+  and execution falls through to the default edit logic — no error is raised.
+- The aider subprocess is launched with `--no-auto-commit` so it never commits
+  autonomously; commits remain the caller's responsibility.
+
+### Output
+
+`Apply` returns the list of files aider reported as changed (lines matching
+`Edited file: <path>` or `Modified file: <path>`) and a short summary assembled
+from remaining stdout lines.
+
+### Fallback contract
+
+`--use-aider` is always optional.  Removing the flag or uninstalling aider
+produces identical skill output via the model-only path.
+</aider_integration>
