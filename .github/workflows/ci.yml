@@ -42,8 +42,31 @@ jobs:
       - name: Build
         run: go build -v ./...
 
+      - name: Build (tui tag)
+        run: go build -tags=tui -v ./...
+
+      - name: Binary size check (C6)
+        run: |
+          go build -o clue-code-notag ./cmd/clue-code
+          go build -tags=tui -o clue-code-tui ./cmd/clue-code
+          size_notag=$(du -b clue-code-notag 2>/dev/null || stat -f%z clue-code-notag)
+          size_tui=$(du -b clue-code-tui 2>/dev/null || stat -f%z clue-code-tui)
+          echo "no-tag binary: ${size_notag} bytes"
+          echo "tui binary:    ${size_tui} bytes"
+          # Thresholds: no-tag <14MB (tui build-tag files excluded), tui <18MB
+          [ "$size_notag" -le 14680064 ] || { echo "FAIL: no-tag binary ${size_notag} > 14MB"; exit 1; }
+          [ "$size_tui" -le 18874368 ] || { echo "FAIL: tui binary ${size_tui} > 18MB"; exit 1; }
+          # Validate tui binary is not dramatically larger than no-tag (delta guard).
+          delta=$((size_tui - size_notag))
+          echo "tui delta:     ${delta} bytes"
+          [ "$delta" -le 6291456 ] || { echo "FAIL: tui delta ${delta} > 6MB — TUI added too much"; exit 1; }
+          rm -f clue-code-notag clue-code-tui
+
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Test (tui tag)
+        run: go test -race -tags=tui -timeout=120s ./...
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.25'
