@@ -37,7 +37,7 @@ func DetectConflicts(a Answers) []Conflict {
 				{
 					Label:    "Qualite avant tout",
 					Provider: "anthropic",
-					Model:    "claude-sonnet-4-6",
+					Model:    "claude-sonnet-4-5",
 					Tradeoff: "Bloque hors-ligne",
 					CostNote: "~$0.45/jour usage leger",
 				},
@@ -51,7 +51,7 @@ func DetectConflicts(a Answers) []Conflict {
 				{
 					Label:    "Compromis intelligent (mode hybrid)",
 					Provider: "hybrid:ollama+anthropic",
-					Model:    "qwen2.5-coder:32b + claude-sonnet-4-6",
+					Model:    "qwen2.5-coder:32b + claude-sonnet-4-5",
 					Tradeoff: "Bascule automatique selon la connexion",
 					CostNote: "~$0.10/jour (cloud rare)",
 				},
@@ -76,7 +76,7 @@ func DetectConflicts(a Answers) []Conflict {
 				{
 					Label:    "Qualite avant tout",
 					Provider: "anthropic",
-					Model:    "claude-sonnet-4-6",
+					Model:    "claude-sonnet-4-5",
 					Tradeoff: "Prompts envoyes a Anthropic (politique zero retention)",
 					CostNote: "~$0.45/jour",
 				},

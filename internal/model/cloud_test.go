@@ -320,7 +320,7 @@ func TestAnthropic_Chat(t *testing.T) {
 	defer srv.Close()
 
 	mc := ModelConfig{
-		ID:        "claude-sonnet-4-6",
+		ID:        "claude-sonnet-4-5",
 		Provider:  "anthropic",
 		Endpoint:  srv.URL + "/v1",
 		APIKeyEnv: "ANTHROPIC_KEY",
@@ -340,7 +340,7 @@ func TestAnthropic_Chat(t *testing.T) {
 	}
 
 	resp, err := client.Chat(context.Background(), ChatRequest{
-		Model:    "claude-sonnet-4-6",
+		Model:    "claude-sonnet-4-5",
 		Messages: []Message{{Role: RoleUser, Content: "hi"}},
 	})
 	if err != nil {
@@ -365,7 +365,7 @@ func TestAnthropic_ChatStream(t *testing.T) {
 	defer srv.Close()
 
 	mc := ModelConfig{
-		ID:       "claude-sonnet-4-6",
+		ID:       "claude-sonnet-4-5",
 		Provider: "anthropic",
 		Endpoint: srv.URL + "/v1",
 	}
@@ -376,7 +376,7 @@ func TestAnthropic_ChatStream(t *testing.T) {
 	}
 
 	ch, err := client.ChatStream(context.Background(), ChatRequest{
-		Model:    "claude-sonnet-4-6",
+		Model:    "claude-sonnet-4-5",
 		Messages: []Message{{Role: RoleUser, Content: "hi"}},
 	})
 	if err != nil {
@@ -415,12 +415,12 @@ func TestAnthropic_RateLimit(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	mc := ModelConfig{ID: "claude-sonnet-4-6", Provider: "anthropic", Endpoint: srv.URL + "/v1"}
+	mc := ModelConfig{ID: "claude-sonnet-4-5", Provider: "anthropic", Endpoint: srv.URL + "/v1"}
 	ctor := providers["anthropic"]
 	client, _ := ctor(mc, "key")
 
 	_, err := client.Chat(context.Background(), ChatRequest{
-		Model:    "claude-sonnet-4-6",
+		Model:    "claude-sonnet-4-5",
 		Messages: []Message{{Role: RoleUser, Content: "hi"}},
 	})
 	if !errors.Is(err, ErrRateLimit) {
@@ -430,7 +430,7 @@ func TestAnthropic_RateLimit(t *testing.T) {
 
 func TestAnthropic_DefaultEndpoint(t *testing.T) {
 	ctor := providers["anthropic"]
-	mc := ModelConfig{ID: "claude-sonnet-4-6", Provider: "anthropic"}
+	mc := ModelConfig{ID: "claude-sonnet-4-5", Provider: "anthropic"}
 	client, err := ctor(mc, "key")
 	if err != nil {
 		t.Fatal(err)

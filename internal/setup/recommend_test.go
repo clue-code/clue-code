@@ -393,7 +393,7 @@ func TestJustification_TopQuality_OnlyForScore10(t *testing.T) {
 	t.Parallel()
 	a := Answers{Sensitive: false, PriorityCost: false, Offline: false}
 
-	p10 := ProviderScore{Provider: "anthropic", Model: "claude-sonnet-4-6", Quality: 10}
+	p10 := ProviderScore{Provider: "anthropic", Model: "claude-sonnet-4-5", Quality: 10}
 	just10 := buildJustification(a, p10)
 	if !strings.Contains(just10, "top niveau") {
 		t.Errorf("Quality=10 should produce 'top niveau', got %q", just10)

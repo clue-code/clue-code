@@ -69,7 +69,7 @@ surfaces explicit arbitration options instead of imposing a single choice.
 | ollama     | deepseek-r1:7b     | 10      | 10   | 7       | 10      | free        |
 | mlx        | Llama-3.2-3B       | 10      | 10   | 6       | 10      | free        |
 | deepseek   | deepseek-chat      | 4       | 9    | 8       | 0       | $0.28       |
-| anthropic  | claude-sonnet-4-6  | 4       | 2    | 10      | 0       | $15.00      |
+| anthropic  | claude-sonnet-4-5  | 4       | 2    | 10      | 0       | $15.00      |
 | groq       | llama-3.3-70b      | 4       | 7    | 8       | 0       | $0.59       |
 | openrouter | various            | 4       | 6    | 9       | 0       | ~$1.50      |
 
@@ -90,7 +90,7 @@ Scores:
   Les meilleurs modeles (Claude, GPT-4) sont cloud.
   Les modeles locaux atteignent 60-80% de la qualite cloud.
 
-  [1] Qualite avant tout     → anthropic/claude-sonnet-4-6
+  [1] Qualite avant tout     → anthropic/claude-sonnet-4-5
   [2] Hors-ligne avant tout  → ollama/qwen2.5-coder:32b
   [3] Compromis intelligent  → hybrid:ollama+anthropic
 ```
@@ -139,7 +139,7 @@ precedence when tensions are detected.
 ```
 Quel provider voulez-vous installer ?
 
-  [1] anthropic     claude-sonnet-4-6         Top qualite, cher  ← recommande
+  [1] anthropic     claude-sonnet-4-5         Top qualite, cher  ← recommande
   [2] openrouter    various                   Acces 100+ modeles
   [3] deepseek      deepseek-chat             Cloud, 53x moins cher que Claude
 
@@ -173,7 +173,7 @@ Votre choix [1] : _
 
 ```
 >> Recommandation : ANTHROPIC
-   Modele       : claude-sonnet-4-6
+   Modele       : claude-sonnet-4-5
    Cout         : $15.00/M tokens
 
    qualite top niveau
@@ -189,7 +189,7 @@ Votre choix [1] : _
 
 Quel provider voulez-vous installer ?
 
-  [1] anthropic     claude-sonnet-4-6         Top qualite, cher  ← recommande
+  [1] anthropic     claude-sonnet-4-5         Top qualite, cher  ← recommande
   [2] openrouter    various                   Acces 100+ modeles
   [3] groq          llama-3.3-70b             Ultra-rapide cloud
 
