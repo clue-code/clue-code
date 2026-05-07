@@ -251,26 +251,47 @@ func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Pro
 	fmt.Println("─────────────────────────────────────────────────────")
 	fmt.Println()
 
-	// Offer scoring table if not already shown.
-	if !explainMode {
-		detailAns, err := confirmYN(ctx, "Voir le detail du scoring ? [o/N] : ", false)
+	// When no conflicts, present interactive choice menu (P1-P7).
+	// Conflict path already resolved above; this branch handles the common case.
+	if len(rec.Conflicts) == 0 {
+		selected, action, err := chooseProvider(ctx, rec, answers, explainMode)
+		if err != nil || action == "cancel" {
+			fmt.Println()
+			fmt.Println(yellow("Setup annule. Relancez 'clue-code setup' quand vous etes pret."))
+			_ = setup.ClearProgress()
+			return 0
+		}
+		if action == "restart" {
+			_ = setup.ClearProgress()
+			return runWizard(ctx, explainMode)
+		}
+		// action == "install": update rec with the selected provider.
+		rec.Primary = selected
+		rec.Provider = selected.Provider
+		rec.Model = selected.Model
+		rec.Cost = setup.CostLabel(selected)
+		rec.Steps = setup.BuildSteps(selected)
+	} else {
+		// Conflict path: ask with the old simple confirm (no alternative menu needed).
+		if !explainMode {
+			detailAns, err := confirmYN(ctx, "Voir le detail du scoring ? [o/N] : ", false)
+			if err != nil {
+				return handleCancel()
+			}
+			if detailAns {
+				printScoringTable(answers)
+			}
+		}
+		installAns, err := confirmYN(ctx, "Voulez-vous installer/configurer maintenant ? [O/n] : ", true)
 		if err != nil {
 			return handleCancel()
 		}
-		if detailAns {
-			printScoringTable(answers)
+		if !installAns {
+			fmt.Println()
+			fmt.Println(yellow("Setup annule. Relancez 'clue-code setup' quand vous etes pret."))
+			_ = setup.ClearProgress()
+			return 0
 		}
-	}
-
-	installAns, err := confirmYN(ctx, "Voulez-vous installer/configurer maintenant ? [O/n] : ", true)
-	if err != nil {
-		return handleCancel()
-	}
-	if !installAns {
-		fmt.Println()
-		fmt.Println(yellow("Setup annule. Relancez 'clue-code setup' quand vous etes pret."))
-		_ = setup.ClearProgress()
-		return 0
 	}
 
 	prog.Stage = "install"
@@ -433,6 +454,83 @@ func printScoringTable(a setup.Answers) {
 	}
 	fmt.Println("─────────────────────────────────────────────────────────────────────────────")
 	fmt.Println()
+}
+
+// chooseProvider presents the interactive alternative-choice menu (P1-P7).
+// It returns the selected ProviderScore and one of the action strings:
+// "install", "restart", or "cancel".
+// When explainMode is already true, [s] still works but the table was already
+// printed above; the function just re-prompts.
+// Returns an error after 3 consecutive invalid responses.
+func chooseProvider(ctx context.Context, rec setup.Recommendation, answers setup.Answers, explainMode bool) (setup.ProviderScore, string, error) {
+	const maxAttempts = 3
+
+	// Build the ordered list: [1]=primary, [2]=alt[0], [3]=alt[1] (when present).
+	providers := []setup.ProviderScore{rec.Primary}
+	providers = append(providers, rec.Alternatives...)
+
+menuLoop:
+	for {
+		// Print menu.
+		fmt.Println()
+		fmt.Println(bold("Quel provider voulez-vous installer ?"))
+		fmt.Println()
+		for i, p := range providers {
+			label := fmt.Sprintf("[%d] %-12s %-25s %s", i+1, p.Provider, p.Model, p.Description)
+			if i == 0 {
+				fmt.Printf("  %s  %s\n", label, cyan("← recommande"))
+			} else {
+				fmt.Printf("  %s\n", label)
+			}
+		}
+		fmt.Println()
+		fmt.Println("  [s] Voir le detail du scoring")
+		fmt.Println("  [r] Refaire les questions")
+		fmt.Println("  [n] Annuler")
+		fmt.Println()
+
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			line := prompt(ctx, "Votre choix [1] : ")
+			if line == "" && ctx.Err() != nil {
+				return setup.ProviderScore{}, "cancel", ctx.Err()
+			}
+			trimmed := strings.TrimSpace(strings.ToLower(line))
+
+			// Default: empty input selects primary (P7).
+			if trimmed == "" {
+				return providers[0], "install", nil
+			}
+
+			// Named actions.
+			switch trimmed {
+			case "s":
+				// Show scoring table then re-display the full menu.
+				printScoringTable(answers)
+				continue menuLoop
+			case "r":
+				return setup.ProviderScore{}, "restart", nil
+			case "n":
+				return setup.ProviderScore{}, "cancel", nil
+			}
+
+			// Numeric selection.
+			for i, p := range providers {
+				if trimmed == fmt.Sprintf("%d", i+1) {
+					return p, "install", nil
+				}
+			}
+
+			// Invalid input.
+			validChoices := make([]string, len(providers))
+			for i := range providers {
+				validChoices[i] = fmt.Sprintf("%d", i+1)
+			}
+			fmt.Printf("  %s Entrez %s, s, r ou n.\n", yellow("?"), strings.Join(validChoices, "/"))
+		}
+		// After maxAttempts invalid inputs, abort.
+		fmt.Println(red("Trop de tentatives invalides. Setup annule."))
+		return setup.ProviderScore{}, "cancel", fmt.Errorf("trop de tentatives invalides")
+	}
 }
 
 // handleCancel prints a cancellation message and returns exit code 1.
