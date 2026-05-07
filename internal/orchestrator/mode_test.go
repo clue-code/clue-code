@@ -15,12 +15,12 @@ type mockProvider struct {
 	isLocal bool
 }
 
-func (m *mockProvider) Name() string    { return m.name }
-func (m *mockProvider) IsLocal() bool   { return m.isLocal }
+func (m *mockProvider) Name() string  { return m.name }
+func (m *mockProvider) IsLocal() bool { return m.isLocal }
 
-func ollamaMock() Provider  { return &mockProvider{name: "ollama", isLocal: true} }
-func mlxMock() Provider     { return &mockProvider{name: "mlx", isLocal: true} }
-func deepseekMock() Provider { return &mockProvider{name: "deepseek", isLocal: false} }
+func ollamaMock() Provider    { return &mockProvider{name: "ollama", isLocal: true} }
+func mlxMock() Provider       { return &mockProvider{name: "mlx", isLocal: true} }
+func deepseekMock() Provider  { return &mockProvider{name: "deepseek", isLocal: false} }
 func anthropicMock() Provider { return &mockProvider{name: "anthropic", isLocal: false} }
 
 // TestRouter_LocalMode_BlocksNetworkEgress verifies L1:

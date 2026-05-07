@@ -43,10 +43,10 @@ type Provider interface {
 // ModeRouter routes task requests to a Provider based on the active Mode.
 // It is the single enforcement point for L1–L4 acceptance criteria.
 type ModeRouter struct {
-	mode            config.Mode
-	localProviders  []Provider
-	cloudProviders  []Provider
-	healthCheck     func(Provider) bool
+	mode           config.Mode
+	localProviders []Provider
+	cloudProviders []Provider
+	healthCheck    func(Provider) bool
 }
 
 // NewModeRouter constructs a ModeRouter for the given mode and provider sets.
