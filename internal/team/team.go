@@ -1,6 +1,7 @@
 package team
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/clue-code/clue-code/internal/clock"
 	"github.com/google/uuid"
 )
 
@@ -53,6 +55,12 @@ type Spec struct {
 	Workers int
 	// ProjectRoot is the root directory under which the team journal is stored.
 	ProjectRoot string
+	// Clock is the time source used for progress tracking. Defaults to
+	// clock.Real() when nil. Inject a *clock.FakeClock in tests.
+	Clock clock.Clock
+	// StalledThreshold is the inactivity duration before the detector fires.
+	// Defaults to 60s when zero.
+	StalledThreshold time.Duration
 }
 
 // TaskSpec describes a task to be created.
@@ -77,6 +85,7 @@ type Team struct {
 
 	inboxClosed atomic.Bool
 	scheduler   *Scheduler
+	stalled     *StalledDetector
 }
 
 // teamSnapshot is the JSON structure written to team.json.
@@ -107,6 +116,11 @@ func TeamCreate(spec Spec) (*Team, error) {
 		id = uuid.New().String()
 	}
 
+	clk := spec.Clock
+	if clk == nil {
+		clk = clock.Real()
+	}
+
 	journal, err := OpenJournal(id, spec.ProjectRoot)
 	if err != nil {
 		return nil, fmt.Errorf("team: open journal: %w", err)
@@ -121,6 +135,10 @@ func TeamCreate(spec Spec) (*Team, error) {
 		mailboxes:   make(map[string]chan Message, spec.Workers),
 		scheduler:   NewScheduler(),
 	}
+
+	sd := NewStalledDetector(t, clk, spec.StalledThreshold)
+	t.stalled = sd
+	sd.Start(context.Background())
 
 	// Write the team-create envelope (seq=0).
 	snap := teamSnapshot{
@@ -167,6 +185,16 @@ func TeamCreate(spec Spec) (*Team, error) {
 // If snapshot caches (team.json / tasks.json) are missing, they are rebuilt
 // from the journal (D12).
 func Open(teamID, projectRoot string) (*Team, error) {
+	return OpenWithClock(teamID, projectRoot, nil, 0)
+}
+
+// OpenWithClock is like Open but accepts an injectable clock and stall
+// threshold. Pass nil clock to use the real system clock.
+func OpenWithClock(teamID, projectRoot string, clk clock.Clock, stalledThreshold time.Duration) (*Team, error) {
+	if clk == nil {
+		clk = clock.Real()
+	}
+
 	journal, err := OpenJournal(teamID, projectRoot)
 	if err != nil {
 		return nil, fmt.Errorf("team: open journal for %q: %w", teamID, err)
@@ -249,6 +277,13 @@ func Open(teamID, projectRoot string) (*Team, error) {
 
 	// seq starts at max(seq in journal)+1 to maintain monotonicity.
 	t.seq.Store(maxSeq + 1)
+
+	// Create and arm the stalled detector from the journal before starting it,
+	// so a restart does not immediately fire a false stall event (D8 re-arm).
+	sd := NewStalledDetector(t, clk, stalledThreshold)
+	sd.ArmFromJournal(envs)
+	t.stalled = sd
+	sd.Start(context.Background())
 
 	// Ensure mailboxes exist for all workers referenced in tasks.
 	t.mu.Lock()
@@ -365,6 +400,9 @@ func (t *Team) TaskCreate(spec TaskSpec) (*Task, error) {
 // then attempts a non-blocking push into the target worker's mailbox.
 // Returns ErrMailboxFull immediately if the mailbox is at capacity (D5).
 func (t *Team) SendMessage(to, kind string, payload json.RawMessage) error {
+	if t.stalled != nil {
+		t.stalled.RecordProgress()
+	}
 	// Ensure mailbox exists and get a reference to it.
 	t.mu.RLock()
 	ch, ok := t.mailboxes[to]
@@ -447,6 +485,9 @@ func (t *Team) TaskList() []*Task {
 // TaskUpdate updates the status of a task, appends the change to the journal,
 // and asks the scheduler to evaluate newly-runnable tasks.
 func (t *Team) TaskUpdate(taskID string, status TaskStatus) error {
+	if t.stalled != nil {
+		t.stalled.RecordProgress()
+	}
 	t.mu.RLock()
 	_, ok := t.tasks[taskID]
 	t.mu.RUnlock()
@@ -498,6 +539,12 @@ func (t *Team) TaskUpdate(taskID string, status TaskStatus) error {
 // Close flushes the journal and closes all mailboxes.
 func (t *Team) Close() error {
 	t.inboxClosed.Store(true)
+
+	// Stop the stalled detector before closing mailboxes so its goroutine
+	// cannot attempt to send on a closed channel (D8 goroutine leak prevention).
+	if t.stalled != nil {
+		t.stalled.Stop()
+	}
 
 	t.mu.Lock()
 	for _, ch := range t.mailboxes {
