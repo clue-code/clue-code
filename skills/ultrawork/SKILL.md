@@ -111,6 +111,34 @@ Why bad: L2 is expensive overkill for a trivial fix. Use executor at L0 instead.
 - [ ] No new errors introduced
 </Final_Checklist>
 
+<Team_Integration>
+## Using internal/team from Ultrawork
+
+When ultrawork fires parallel executor agents that need inter-agent messaging,
+they can use the `internal/team` API directly. Key entry points:
+
+```go
+import "github.com/clue-code/clue-code/internal/team"
+
+// Create a team for the parallel batch.
+t, err := team.TeamCreate(team.Spec{Workers: n, ProjectRoot: root})
+
+// Deliver a message from one worker to another (non-blocking).
+err = t.SendMessage(from, to, payload)
+
+// Read from a worker's inbox.
+inbox, err := t.Inbox(agentRef)
+msg := <-inbox
+
+// Tear down when done.
+t.Close()
+```
+
+See `docs/team-transport.md` for wire format, journal layout, and operator CLI.
+The `clue-code team list|inspect|tail|demo` commands provide read-only views
+into any running team created by an ultrawork batch.
+</Team_Integration>
+
 <Advanced>
 ## Relationship to Other Modes
 

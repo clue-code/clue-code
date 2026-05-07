@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -13,16 +14,17 @@ Usage:
   clue-code <command> [arguments]
 
 Commands:
-  version    Print build information
-  doctor     Diagnose the local environment (OS, arch, RAM, deps)
-  state      Read, write, and inspect persistent agent state
-  hooks      Manage and inspect lifecycle hooks
-  skill      List and run skills
-  agent      List and invoke agents (list, run, moa)
-  chat       Send a prompt to the configured model
-  tokens     Token usage, cost summary, and cache management
-  tui        Launch the terminal UI (requires -tags=tui build)
-  help       Show this message
+  version      Print build information
+  doctor       Diagnose the local environment (OS, arch, RAM, deps)
+  state        Read, write, and inspect persistent agent state
+  hooks        Manage and inspect lifecycle hooks
+  skill        List and run skills
+  agent        List and invoke agents (list, run, moa)
+  chat         Send a prompt to the configured model
+  tokens       Token usage, cost summary, and cache management
+  team         Manage and run agent teams (list, inspect, tail, demo)
+  tui          Launch the terminal UI (requires -tags=tui build)
+  help         Show this message
 
 Run "clue-code <command> -h" for command-specific flags.
 `
@@ -35,6 +37,7 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
+	ctx := context.Background()
 	cmd, args := os.Args[1], os.Args[2:]
 	switch cmd {
 	case "version", "-v", "--version":
@@ -53,6 +56,10 @@ func main() {
 		runChat(args)
 	case "tokens":
 		runTokens(args)
+	case "team":
+		os.Exit(runTeam(ctx, args))
+	case "team-worker":
+		os.Exit(runTeamWorker(ctx, args))
 	case "tui":
 		os.Exit(runTUI(args))
 	case "help", "-h", "--help":
