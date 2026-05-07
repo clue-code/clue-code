@@ -1,5 +1,9 @@
-// Package setup implements the interactive setup wizard for CLUE CODE.
 package setup
+
+import (
+	"fmt"
+	"strings"
+)
 
 // Answers holds the user's responses to the three wizard questions.
 type Answers struct {
@@ -14,89 +18,147 @@ type Answers struct {
 }
 
 // Recommendation is the output of the recommendation engine.
+//
+// When Conflicts is non-empty the caller must present arbitration options to
+// the user before proceeding. When Conflicts is empty, Primary is the best
+// single choice and Alternatives holds the next 1–2 runners-up.
 type Recommendation struct {
-	// Provider is a short lowercase identifier: "ollama", "deepseek", "anthropic", "mlx".
-	Provider string
-	// Model is the specific model name to use.
-	Model string
-	// Justification is a human-readable explanation shown to the user.
+	// Primary is the top-ranked provider/model.
+	Primary ProviderScore
+	// Alternatives holds up to 2 additional ranked options shown when there
+	// are no conflicts.
+	Alternatives []ProviderScore
+	// Conflicts lists detected tensions that require user arbitration.
+	Conflicts []Conflict
+	// Justification is a human-readable explanation of why Primary was chosen.
 	Justification string
-	// Cost is a short cost description (e.g. "free", "$0.14/M tokens").
+	// Cost is a short cost description for backward-compat display (e.g. "free").
 	Cost string
 	// Steps lists the high-level actions needed to complete setup.
 	Steps []string
+
+	// Legacy fields kept for backward compatibility with existing callers.
+	// Provider and Model mirror Primary.Provider and Primary.Model.
+	Provider string
+	Model    string
 }
 
 // Recommend maps a set of Answers to the best provider recommendation.
 //
-// Decision logic:
-//   - Sensitive=true OR Offline=true → Ollama (always local, no data leaves device)
-//   - !Sensitive AND !Offline AND PriorityCost=true → DeepSeek ($0.14/M, cloud)
-//   - !Sensitive AND !Offline AND !PriorityCost → Anthropic Claude (best quality, cloud)
-//   - HasMacM=true AND Sensitive → MLX is offered as alternative to Ollama
-//
-// MLX is only surfaced when HasMacM is true AND Sensitive is true AND
-// PriorityCost is false (best local quality on Apple Silicon).
+// It replaces the old binary if/else logic with weighted multi-criteria
+// scoring across 4 dimensions (Privacy, Cost, Quality, Offline).
+// When conflicting priorities are detected the Conflicts field is populated
+// so the caller can present explicit arbitration options.
 func Recommend(a Answers) Recommendation {
-	switch {
-	case a.HasMacM && a.Sensitive && !a.PriorityCost && !a.Offline:
-		// Apple Silicon + privacy conscious + quality preferred → MLX
-		return Recommendation{
-			Provider:      "mlx",
-			Model:         "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
-			Justification: "Vous avez un Mac Apple Silicon et souhaitez garder vos données privées. MLX offre des inférences GPU natives ultra-rapides sans aucune donnée quittant votre machine.",
-			Cost:          "gratuit (GPU local)",
-			Steps: []string{
-				"Installer Python 3.11+  : brew install python@3.11",
-				"Installer MLX-LM        : pip install mlx-lm",
-				"Démarrer le serveur     : mlx_lm.server --model mlx-community/Mistral-7B-Instruct-v0.3-4bit",
-				"Configurer clue-code    : clue-code mode local",
-			},
-		}
+	conflicts := DetectConflicts(a)
+	ranked := RankProviders(a)
 
-	case a.Sensitive || a.Offline:
-		// Privacy / offline requirement → Ollama
-		return Recommendation{
-			Provider:      "ollama",
-			Model:         "llama3.2",
-			Justification: "Vos données restent entièrement sur votre machine. Ollama fait tourner les modèles en local, sans connexion internet requise après le téléchargement initial.",
-			Cost:          "gratuit (CPU/GPU local)",
-			Steps: []string{
-				"Installer Ollama  : curl -fsSL https://ollama.com/install.sh | sh",
-				"Télécharger llama3.2 : ollama pull llama3.2",
-				"Démarrer Ollama   : ollama serve  (si pas déjà actif)",
-				"Tester            : clue-code chat \"hello\"",
-			},
-		}
+	top := ranked[0]
 
-	case !a.Sensitive && !a.Offline && a.PriorityCost:
-		// Cost-first, cloud OK → DeepSeek
-		return Recommendation{
-			Provider:      "deepseek",
-			Model:         "deepseek-chat",
-			Justification: "DeepSeek offre d'excellentes performances à un coût très faible ($0.14/M tokens en entrée). Idéal pour un usage intensif sans se ruiner.",
-			Cost:          "$0.14/M tokens",
-			Steps: []string{
-				"Créer un compte DeepSeek : https://platform.deepseek.com",
-				"Générer une clé API      : Settings → API Keys → Create",
-				"Coller la clé ici        : (le wizard vous demandera)",
-				"Tester                   : clue-code chat \"hello\"",
-			},
-		}
+	rec := Recommendation{
+		Primary:       top,
+		Conflicts:     conflicts,
+		Justification: buildJustification(a, top),
+		Cost:          CostLabel(top),
+		Steps:         BuildSteps(top),
+		// Legacy mirror fields.
+		Provider: top.Provider,
+		Model:    top.Model,
+	}
 
+	// Only surface alternatives when there is no conflict to arbitrate.
+	if len(conflicts) == 0 && len(ranked) > 1 {
+		end := minInt(3, len(ranked))
+		rec.Alternatives = ranked[1:end]
+	}
+
+	return rec
+}
+
+// buildJustification produces a concise explanation of why top was chosen.
+func buildJustification(a Answers, top ProviderScore) string {
+	parts := []string{}
+	if (a.Sensitive || top.Privacy >= 8) && top.Privacy >= 8 {
+		parts = append(parts, "vos donnees restent privees")
+	}
+	if a.PriorityCost && top.Cost >= 8 {
+		if top.CostUSD1M == 0 {
+			parts = append(parts, "cout minimal (gratuit)")
+		} else {
+			parts = append(parts, fmt.Sprintf("cout minimal ($%.2f/M tokens)", top.CostUSD1M))
+		}
+	}
+	if !a.PriorityCost && top.Quality >= 8 {
+		parts = append(parts, "qualite top niveau")
+	}
+	if a.Offline && top.Offline >= 8 {
+		parts = append(parts, "fonctionne hors-ligne")
+	}
+	if len(parts) == 0 {
+		parts = append(parts, top.Description)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// CostLabel returns a human-readable cost string for display.
+// Exported for use by the cmd layer.
+func CostLabel(p ProviderScore) string {
+	if p.CostUSD1M == 0 {
+		return "gratuit (local)"
+	}
+	return fmt.Sprintf("$%.2f/M tokens", p.CostUSD1M)
+}
+
+// BuildSteps returns setup instructions for the given provider.
+// It is exported so the cmd layer can rebuild steps after conflict arbitration.
+func BuildSteps(p ProviderScore) []string {
+	switch p.Provider {
+	case "ollama":
+		return []string{
+			"Installer Ollama  : curl -fsSL https://ollama.com/install.sh | sh",
+			fmt.Sprintf("Telecharger le modele : ollama pull %s", p.Model),
+			"Demarrer Ollama   : ollama serve  (si pas deja actif)",
+			"Tester            : clue-code chat \"hello\"",
+		}
+	case "mlx":
+		return []string{
+			"Installer Python 3.11+ : brew install python@3.11",
+			"Installer MLX-LM       : pip install mlx-lm",
+			fmt.Sprintf("Demarrer le serveur    : mlx_lm.server --model mlx-community/%s", p.Model),
+			"Configurer clue-code   : clue-code mode local",
+		}
+	case "deepseek":
+		return []string{
+			"Creer un compte DeepSeek : https://platform.deepseek.com",
+			"Generer une cle API      : Settings -> API Keys -> Create",
+			"Coller la cle ici        : (le wizard vous demandera)",
+			"Tester                   : clue-code chat \"hello\"",
+		}
+	case "anthropic":
+		return []string{
+			"Creer un compte Anthropic : https://console.anthropic.com",
+			"Generer une cle API       : Settings -> API Keys -> Create key",
+			"Coller la cle ici         : (le wizard vous demandera)",
+			"Tester                    : clue-code chat \"hello\"",
+		}
+	case "groq":
+		return []string{
+			"Creer un compte Groq : https://console.groq.com",
+			"Generer une cle API  : API Keys -> Create API Key",
+			"Coller la cle ici    : (le wizard vous demandera)",
+			"Tester               : clue-code chat \"hello\"",
+		}
+	case "openrouter":
+		return []string{
+			"Creer un compte OpenRouter : https://openrouter.ai",
+			"Generer une cle API        : Keys -> Create Key",
+			"Coller la cle ici          : (le wizard vous demandera)",
+			"Tester                     : clue-code chat \"hello\"",
+		}
 	default:
-		// Quality-first, cloud OK → Anthropic
-		return Recommendation{
-			Provider:      "anthropic",
-			Model:         "claude-sonnet-4-6",
-			Justification: "Claude d'Anthropic offre la meilleure qualité de raisonnement, d'analyse de code et de génération de texte. Recommandé pour un usage professionnel.",
-			Cost:          "~$3/M tokens",
-			Steps: []string{
-				"Créer un compte Anthropic : https://console.anthropic.com",
-				"Générer une clé API       : Settings → API Keys → Create key",
-				"Coller la clé ici         : (le wizard vous demandera)",
-				"Tester                    : clue-code chat \"hello\"",
-			},
+		return []string{
+			fmt.Sprintf("Configurer le provider %q manuellement", p.Provider),
+			"Tester : clue-code chat \"hello\"",
 		}
 	}
 }
