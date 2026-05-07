@@ -25,7 +25,7 @@ type Runner interface {
 // PostToolUse). The engine wraps the call with SessionStart/Stop.
 type RealRunner struct {
 	modelClient model.Client
-	modelID     string         // model ID to set on ChatRequest.Model; resolved at construction time
+	modelID     string // model ID to set on ChatRequest.Model; resolved at construction time
 	store       state.Store
 	hm          *hooks.Manager // nil-safe: hooks are no-op when nil
 	out         io.Writer

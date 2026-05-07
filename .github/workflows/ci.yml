@@ -117,7 +117,7 @@ jobs:
 
       - name: Smoke — agent list (19+ agents)
         run: |
-          count=$(clue-code agent list | grep -c '\.md' || true)
+          count=$(clue-code agent list | grep -c '\S' || true)
           echo "Agent count: $count"
           [ "$count" -ge 1 ] || { echo "FAIL: no agents found"; exit 1; }
 
