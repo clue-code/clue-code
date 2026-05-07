@@ -108,11 +108,9 @@ func NewClient(ctx context.Context, command string, args ...string) (*Client, er
 	initCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	_, err = c.call(initCtx, "initialize", initParams)
-	if err != nil {
-		// Server may not implement initialize — treat as non-fatal.
-		// Some minimal MCP servers skip the handshake.
-	}
+	// Server may not implement initialize — treat as non-fatal.
+	// Some minimal MCP servers skip the handshake.
+	_, _ = c.call(initCtx, "initialize", initParams)
 
 	return c, nil
 }
@@ -241,6 +239,7 @@ func (c *Client) readLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			// Panic inside readLoop — mark closed and drain pending channels.
+			_ = r
 		}
 		c.closed.Store(true)
 		c.drainPending()

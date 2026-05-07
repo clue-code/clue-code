@@ -122,7 +122,7 @@ func mcpCall(ctx context.Context, args []string) int {
 	toolArgsRaw := remaining[sepIdx+2]
 
 	// Validate JSON args.
-	var toolArgs json.RawMessage = json.RawMessage(toolArgsRaw)
+	toolArgs := json.RawMessage(toolArgsRaw)
 	if !json.Valid(toolArgs) {
 		fmt.Fprintf(os.Stderr, "mcp call: tool args are not valid JSON: %s\n", toolArgsRaw)
 		return 2
