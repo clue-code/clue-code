@@ -56,6 +56,13 @@ func newScanner(r io.Reader) *bufio.Scanner {
 	return s
 }
 
+// NewScanner returns a bufio.Scanner configured for NDJSON with a 10 MiB
+// token buffer. Use this in external packages (e.g. cmd/clue-code) that need
+// to call DecodeNext on an arbitrary reader.
+func NewScanner(r io.Reader) *bufio.Scanner {
+	return newScanner(r)
+}
+
 // DecodeNext reads the next non-empty line from s, unmarshals it as an
 // Envelope, and validates the version field.
 // It returns (Envelope{}, io.EOF) when there are no more lines.
