@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/clue-code/clue-code/internal/adapters/aider"
 	"github.com/clue-code/clue-code/internal/config"
 	"github.com/clue-code/clue-code/internal/orchestrator"
 	"github.com/clue-code/clue-code/internal/version"
@@ -43,7 +44,7 @@ func runDoctor(args []string) {
 
 	fmt.Println()
 	fmt.Println("External dependencies:")
-	checkBinary("aider", "edit engine (Phase 2+)")
+	checkAider()
 	checkBinary("ollama", "local model runtime (cross-platform fallback)")
 	checkBinary("mlx_lm.generate", "Apple Silicon native inference (preferred on macOS)")
 	checkBinary("python3", "required for LoRA pipeline (Phase 5+)")
@@ -70,6 +71,17 @@ func runDoctor(args []string) {
 
 	fmt.Println()
 	fmt.Println("Status: ready (Phase 1 MVP scaffold).")
+}
+
+// checkAider probes for the aider binary using the adapter's own detection
+// logic so that the doctor output matches what the adapter would actually use.
+func checkAider() {
+	c := aider.NewClient()
+	if c.Available() {
+		fmt.Printf("  ✓ %-22s %s\n", "aider", c.Version())
+	} else {
+		fmt.Printf("  ✗ %-22s not found (optional, fallback edit available)\n", "aider")
+	}
 }
 
 func checkBinary(bin, purpose string) {

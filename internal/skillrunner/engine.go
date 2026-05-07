@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/clue-code/clue-code/internal/hooks"
 	"github.com/clue-code/clue-code/internal/state"
@@ -25,12 +26,21 @@ var ErrSkillDepthExceeded = errors.New("skillrunner: depth exceeded")
 // It is a field so tests can substitute a seam without subprocess overhead.
 type RunFunc func(ctx context.Context, skill *Skill, args []string) error
 
+// AiderApplyFunc is an optional callback set via WithAiderApply. When present
+// and the engine has no Runner (or the Runner defers to it), the engine uses
+// it to apply edits via the aider AI coding assistant.
+//
+// instruction is the concatenated skill args (the "edit instruction").
+// It returns the list of files changed, a short summary, and any error.
+type AiderApplyFunc func(instruction string) (filesChanged []string, summary string, err error)
+
 // Engine loads and executes skills with hook lifecycle integration.
 type Engine struct {
-	hm     *hooks.Manager
-	skills map[string]*Skill
-	runFn  RunFunc
-	runner Runner
+	hm         *hooks.Manager
+	skills     map[string]*Skill
+	runFn      RunFunc
+	runner     Runner
+	aiderApply AiderApplyFunc
 }
 
 // NewEngine constructs an Engine. hm may be nil for hook-less operation.
@@ -109,6 +119,11 @@ func (e *Engine) Run(ctx context.Context, name string, args []string) (retErr er
 		}()
 		if e.runner != nil {
 			runErr = e.runner.Run(ctx, skill, args)
+		} else if e.aiderApply != nil {
+			// No model runner available but aider is wired: use it to apply the
+			// skill args as an edit instruction directly.
+			instruction := joinArgs(args)
+			_, _, runErr = e.aiderApply(instruction)
 		} else {
 			runErr = e.runFn(ctx, skill, args)
 		}
@@ -127,6 +142,16 @@ func (e *Engine) WithRunFunc(fn RunFunc) *Engine {
 // Use this to wire RealRunner in production.
 func (e *Engine) WithRunner(r Runner) *Engine {
 	e.runner = r
+	return e
+}
+
+// WithAiderApply registers an optional aider apply callback. When set and the
+// engine has no Runner, Run will delegate to this function instead of the
+// default no-op RunFunc, passing the joined skill args as the edit instruction.
+// When a Runner is already set, the callback is stored for future use but the
+// Runner takes precedence (it may call AiderApply internally if needed).
+func (e *Engine) WithAiderApply(fn AiderApplyFunc) *Engine {
+	e.aiderApply = fn
 	return e
 }
 
@@ -169,4 +194,10 @@ func validateSkillName(name string) error {
 		return fmt.Errorf("skillrunner: %w", err)
 	}
 	return nil
+}
+
+// joinArgs concatenates skill arguments into a single instruction string,
+// space-separated. Used when forwarding args to an AiderApplyFunc.
+func joinArgs(args []string) string {
+	return strings.Join(args, " ")
 }

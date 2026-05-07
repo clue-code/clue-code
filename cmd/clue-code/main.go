@@ -23,6 +23,7 @@ Commands:
   chat         Send a prompt to the configured model
   tokens       Token usage, cost summary, and cache management
   team         Manage and run agent teams (list, inspect, tail, demo)
+  mcp          Bridge MCP servers (list, call)
   tui          Launch the terminal UI (requires -tags=tui build)
   help         Show this message
 
@@ -60,6 +61,8 @@ func main() {
 		os.Exit(runTeam(ctx, args))
 	case "team-worker":
 		os.Exit(runTeamWorker(ctx, args))
+	case "mcp":
+		os.Exit(runMCP(ctx, args))
 	case "tui":
 		os.Exit(runTUI(args))
 	case "help", "-h", "--help":
