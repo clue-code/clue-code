@@ -37,11 +37,10 @@ func TestStalledTeamDetector(t *testing.T) {
 	// Advance FakeClock past the threshold to trigger the stall detector.
 	clk.Advance(61 * time.Second)
 
-	// Wait up to 2s real time for the background goroutine to process the tick.
-	// 500ms was too tight on loaded CI runners — increased to reduce flakiness.
+	// Wait up to 500ms real time for the background goroutine to process the tick.
 	var state string
 	var age time.Duration
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		state, age = tm.stalled.State()
 		if state == "stalled" {
