@@ -326,18 +326,21 @@ func pipeStdin(t *testing.T, data string) {
 		t.Fatalf("os.Pipe: %v", err)
 	}
 	if _, err := w.WriteString(data); err != nil {
-		r.Close()
-		w.Close()
+		_ = r.Close()
+		_ = w.Close()
 		t.Fatalf("write to pipe: %v", err)
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		_ = r.Close()
+		t.Fatalf("close write pipe: %v", err)
+	}
 
 	origStdin := os.Stdin
 	os.Stdin = r
 	// Reinitialize the package-level scanner to read from the new os.Stdin.
 	initStdinScanner()
 	t.Cleanup(func() {
-		r.Close()
+		_ = r.Close()
 		os.Stdin = origStdin
 		initStdinScanner()
 	})
@@ -476,13 +479,17 @@ func TestSetup_ScoringTable_NoError(t *testing.T) {
 
 	// Restore stdout before reading (avoids race with concurrent writes).
 	os.Stdout = origStdout
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close write pipe: %v", err)
+	}
 
 	var buf bytes.Buffer
 	if _, readErr := buf.ReadFrom(r); readErr != nil {
 		t.Fatalf("read pipe: %v", readErr)
 	}
-	r.Close()
+	if err := r.Close(); err != nil {
+		t.Fatalf("close read pipe: %v", err)
+	}
 
 	output := buf.String()
 	if !strings.Contains(output, "Provider") {

@@ -138,7 +138,7 @@ func RankProviders(a Answers) []ProviderScore {
 	copy(ranked, ProviderTable)
 
 	// Remove MLX when not on Apple Silicon.
-	if !(runtime.GOARCH == "arm64" && runtime.GOOS == "darwin") {
+	if runtime.GOARCH != "arm64" || runtime.GOOS != "darwin" {
 		ranked = filterOut(ranked, "mlx")
 	}
 
