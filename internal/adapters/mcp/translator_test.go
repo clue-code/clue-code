@@ -8,11 +8,11 @@ import (
 
 func TestTranslateError_Standard(t *testing.T) {
 	tests := []struct {
-		name       string
-		code       int
-		message    string
+		name         string
+		code         int
+		message      string
 		wantSentinel error
-		wantSubstr string
+		wantSubstr   string
 	}{
 		{
 			name:         "method not found maps to ErrToolNotFound",

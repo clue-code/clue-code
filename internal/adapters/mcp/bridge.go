@@ -6,8 +6,8 @@ import (
 
 // OpenAITool represents a tool in OpenAI's tool calling format.
 type OpenAITool struct {
-	Type     string      `json:"type"`
-	Function OpenAIFunc  `json:"function"`
+	Type     string     `json:"type"`
+	Function OpenAIFunc `json:"function"`
 }
 
 // OpenAIFunc holds the function specification within an OpenAI tool.
