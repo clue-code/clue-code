@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,9 +9,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/clue-code/clue-code/internal/model"
+	"golang.org/x/term"
 )
 
 const chatUsage = `Usage: clue-code chat [flags] <prompt>
@@ -93,6 +96,21 @@ func runChat(args []string) {
 			} else {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 			}
+			// Only propose setup when stdin is a TTY (not in a pipe).
+			if isStdinTTY() {
+				fmt.Fprintln(os.Stderr, "\u274c Aucun modele IA configure.")
+				fmt.Fprint(os.Stderr, "\U0001f4a1 Voulez-vous lancer 'clue-code setup' maintenant ? [O/n] ")
+				sc := bufio.NewScanner(os.Stdin)
+				if sc.Scan() {
+					ans := sc.Text()
+					if isSetupYes(ans) {
+						setupCtx, setupCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+						defer setupCancel()
+						os.Exit(runSetup(setupCtx, nil))
+					}
+				}
+				fmt.Fprintln(os.Stderr, "Plus tard, lancez: clue-code setup")
+			}
 			os.Exit(2)
 		}
 		fmt.Fprintf(os.Stderr, "clue-code chat: %v\n", err)
@@ -172,4 +190,16 @@ func printTokenSummary(u model.Usage) {
 	}
 	fmt.Fprintf(os.Stderr, "[tokens] prompt=%d completion=%d total=%d\n",
 		u.PromptTokens, u.CompletionTokens, u.TotalTokens)
+}
+
+// isStdinTTY returns true when os.Stdin is an interactive terminal.
+// In pipe mode we must not prompt for setup.
+func isStdinTTY() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// isSetupYes returns true for affirmative answers: empty, O, o, y, Y, yes, oui.
+func isSetupYes(s string) bool {
+	s = strings.TrimSpace(strings.ToLower(s))
+	return s == "" || s == "o" || s == "y" || s == "yes" || s == "oui"
 }

@@ -252,17 +252,37 @@ main() {
   ok "Installed ${c_bold}${INSTALL_DIR}/${BINARY_NAME}${c_reset} (${VERSION})"
   hr
 
-  # --- Post-install doctor ----------------------------------------------------
+  # --- Post-install doctor (brief) --------------------------------------------
   warn_optional_deps
   log "Running post-install check…"
   if command -v "${INSTALL_DIR}/${BINARY_NAME}" >/dev/null 2>&1 || [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    "${INSTALL_DIR}/${BINARY_NAME}" doctor || true
+    "${INSTALL_DIR}/${BINARY_NAME}" doctor --brief || true
   fi
 
   hr
   ok "CLUE CODE ${VERSION} installed successfully!"
   log "Get started: ${c_bold}clue-code chat \"hello\"${c_reset}"
   log "Docs:        https://github.com/${REPO}/tree/main/docs"
+
+  # --- Setup wizard prompt (TTY only) ----------------------------------------
+  if [[ -t 0 ]]; then
+    hr
+    printf "%b💡%b Aucun modele IA n'est encore configure.\n" "${c_yellow}" "${c_reset}"
+    printf "   Voulez-vous lancer '%bclue-code setup%b' maintenant ? [O/n] " \
+      "${c_bold}" "${c_reset}"
+    read -r _setup_answer </dev/tty || _setup_answer="n"
+    case "${_setup_answer,,}" in
+      ""|o|y|yes|oui)
+        "${INSTALL_DIR}/${BINARY_NAME}" setup
+        ;;
+      *)
+        log "Plus tard, lancez: ${c_bold}clue-code setup${c_reset}"
+        ;;
+    esac
+  else
+    log "Non-interactive install detected."
+    log "Pour configurer un modele IA, lancez: ${c_bold}clue-code setup${c_reset}"
+  fi
 }
 
 main "$@"

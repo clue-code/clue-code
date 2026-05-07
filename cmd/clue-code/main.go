@@ -14,6 +14,7 @@ Usage:
   clue-code <command> [arguments]
 
 Commands:
+  setup        Interactive setup wizard — configure your first AI model (start here!)
   version      Print build information
   doctor       Diagnose the local environment (OS, arch, RAM, deps)
   state        Read, write, and inspect persistent agent state
@@ -42,6 +43,8 @@ func main() {
 	ctx := context.Background()
 	cmd, args := os.Args[1], os.Args[2:]
 	switch cmd {
+	case "setup":
+		os.Exit(runSetup(ctx, args))
 	case "version", "-v", "--version":
 		runVersion(args)
 	case "doctor":
