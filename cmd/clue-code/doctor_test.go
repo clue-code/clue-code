@@ -34,11 +34,17 @@ func TestReadRAMLinux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	// 16 GB = 16777216 kB
-	fmt.Fprintln(f, "MemTotal:       16777216 kB")
-	fmt.Fprintln(f, "MemFree:         8000000 kB")
-	f.Close()
+	if _, err := fmt.Fprintln(f, "MemTotal:       16777216 kB"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fmt.Fprintln(f, "MemFree:         8000000 kB"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	// Patch open to use our temp file.
 	orig := os.Open
@@ -187,7 +193,7 @@ func TestCheckDisk_output(t *testing.T) {
 
 	checkDisk()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	buf := make([]byte, 1024)
@@ -214,7 +220,7 @@ func TestCheckRAM_output(t *testing.T) {
 
 	checkRAM()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	buf := make([]byte, 1024)
@@ -237,7 +243,7 @@ func TestCheckNetwork_output(t *testing.T) {
 
 	checkNetwork()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	buf := make([]byte, 1024)
@@ -260,7 +266,7 @@ func TestCheckMLX_output(t *testing.T) {
 
 	checkMLX()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	buf := make([]byte, 1024)
@@ -291,7 +297,7 @@ func TestCheckOllama_output(t *testing.T) {
 
 	checkOllama()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	buf := make([]byte, 1024)

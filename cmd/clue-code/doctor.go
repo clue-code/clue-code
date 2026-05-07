@@ -130,7 +130,7 @@ func readRAMLinux() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -230,7 +230,7 @@ func checkNetwork() {
 		fmt.Printf("  ✗ %-22s cannot reach api.deepseek.com:443 (%v)\n", "network (deepseek)", err)
 		return
 	}
-	conn.Close()
+	_ = conn.Close()
 	fmt.Printf("  ✓ %-22s api.deepseek.com:443 reachable\n", "network (deepseek)")
 }
 
