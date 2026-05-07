@@ -79,7 +79,7 @@ func (s *replSession) Save(path string) error {
 		case model.RoleSystem:
 			sb.WriteString("## System\n")
 		default:
-			sb.WriteString(fmt.Sprintf("## %s\n", msg.Role))
+			fmt.Fprintf(&sb, "## %s\n", msg.Role)
 		}
 		sb.WriteString(msg.Content)
 		sb.WriteString("\n\n")
