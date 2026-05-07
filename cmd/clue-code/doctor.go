@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -25,12 +26,24 @@ func runDoctor(args []string) {
 	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
 	verbose := fs.Bool("v", false, "verbose output")
 	brief := fs.Bool("brief", false, "compact 3-line output (for install.sh)")
+	fixSplitConfig := fs.Bool("fix-split-config", false, "merge legacy ~/.config/clue-code/config.json into canonical config path")
+	fixBinary := fs.Bool("fix-binary", false, "strip macOS Gatekeeper attributes and re-codesign the installed binary (macOS only)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
 
 	if *brief {
 		runDoctorBrief()
+		return
+	}
+
+	if *fixSplitConfig {
+		runDoctorFixSplitConfig()
+		return
+	}
+
+	if *fixBinary {
+		runDoctorFixBinary()
 		return
 	}
 
@@ -346,6 +359,129 @@ func runCurlJSON(ctx context.Context, url, field string) (string, error) {
 		return "", fmt.Errorf("unterminated string value")
 	}
 	return rest[1 : end+1], nil
+}
+
+// runDoctorFixSplitConfig merges a legacy ~/.config/clue-code/config.json into
+// the canonical config path (e.g. ~/Library/Application Support/clue-code/config.json
+// on macOS). This repairs the split-brain that occurred when Configure* functions
+// wrote to the XDG path while SetMode used os.UserConfigDir().
+func runDoctorFixSplitConfig() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doctor --fix-split-config: cannot determine home dir: %v\n", err)
+		os.Exit(1)
+	}
+	legacyPath := filepath.Join(home, ".config", "clue-code", "config.json")
+
+	canonicalPath, err := config.JSONConfigPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doctor --fix-split-config: cannot resolve canonical config path: %v\n", err)
+		os.Exit(1)
+	}
+
+	if legacyPath == canonicalPath {
+		fmt.Println("doctor --fix-split-config: paths are identical (Linux/XDG) — nothing to do.")
+		return
+	}
+
+	legacyData, err := os.ReadFile(legacyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("doctor --fix-split-config: no legacy config found — nothing to do.")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "doctor --fix-split-config: read legacy: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Parse both files and merge (canonical wins on key conflicts).
+	merged := map[string]any{}
+	if canonicalData, err := os.ReadFile(canonicalPath); err == nil {
+		_ = unmarshalJSON(canonicalData, merged)
+	}
+	legacyMap := map[string]any{}
+	if err := unmarshalJSON(legacyData, legacyMap); err == nil {
+		for k, v := range legacyMap {
+			if _, exists := merged[k]; !exists {
+				merged[k] = v // only fill in missing keys from legacy
+			}
+		}
+	}
+
+	out, err := marshalJSON(merged)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doctor --fix-split-config: marshal: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(filepath.Dir(canonicalPath), 0o700); err != nil {
+		fmt.Fprintf(os.Stderr, "doctor --fix-split-config: mkdir: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(canonicalPath, out, 0o600); err != nil {
+		fmt.Fprintf(os.Stderr, "doctor --fix-split-config: write canonical: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Rename legacy file to .bak so users can inspect it.
+	bakPath := legacyPath + ".bak"
+	_ = os.Rename(legacyPath, bakPath)
+
+	fmt.Printf("doctor --fix-split-config: merged %s → %s\n", legacyPath, canonicalPath)
+	fmt.Printf("doctor --fix-split-config: legacy file backed up to %s\n", bakPath)
+}
+
+// unmarshalJSON is a thin wrapper over encoding/json Unmarshal for use in doctor.go.
+func unmarshalJSON(data []byte, v any) error {
+	return json.Unmarshal(data, v)
+}
+
+// marshalJSON is a thin wrapper over encoding/json MarshalIndent for use in doctor.go.
+func marshalJSON(v any) ([]byte, error) {
+	return json.MarshalIndent(v, "", "  ")
+}
+
+// runDoctorFixBinary strips macOS Gatekeeper quarantine/provenance xattrs from
+// the installed clue-code binary and applies an ad-hoc codesign so the binary
+// can run without requiring an Apple Developer ID.
+func runDoctorFixBinary() {
+	if runtime.GOOS != "darwin" {
+		fmt.Println("doctor --fix-binary: only applicable on macOS.")
+		return
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doctor --fix-binary: locate binary: %v\n", err)
+		os.Exit(1)
+	}
+	// Resolve symlinks so we operate on the real file.
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+
+	fmt.Printf("doctor --fix-binary: repairing %s\n", exe)
+
+	attrs := []string{"com.apple.provenance", "com.apple.quarantine"}
+	for _, attr := range attrs {
+		cmd := exec.Command("xattr", "-d", attr, exe)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			// xattr -d exits non-zero when attribute is absent — that is fine.
+			_ = out
+		} else {
+			fmt.Printf("  stripped %s\n", attr)
+		}
+	}
+
+	// Re-codesign with ad-hoc identity so macOS accepts the binary.
+	codesign := exec.Command("codesign", "--force", "--sign", "-", exe)
+	if out, err := codesign.CombinedOutput(); err != nil {
+		fmt.Fprintf(os.Stderr, "  codesign failed: %v\n%s\n", err, out)
+		fmt.Fprintln(os.Stderr, "  The binary may still work after xattr stripping. Try running it manually.")
+	} else {
+		fmt.Printf("  codesign --force --sign - OK\n")
+	}
+
+	fmt.Printf("doctor --fix-binary: done. Try: %s version\n", exe)
 }
 
 // agentsDir resolves the directory holding agent definitions.

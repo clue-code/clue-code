@@ -37,14 +37,33 @@ func TestStalledTeamDetector(t *testing.T) {
 	// Advance FakeClock past the threshold to trigger the stall detector.
 	clk.Advance(61 * time.Second)
 
-	// Wait up to 500ms real time for the background goroutine to process the tick.
+	// Yield so the detector goroutine can consume the buffered tick.
+	runtime.Gosched()
+
+	// Poll for the journal entry directly — this also implies state=="stalled".
+	// Polling the journal (rather than state) avoids a race where state is set
+	// before the journal.Append call completes (both happen in check(), but
+	// the mutex is released between them).
+	var stalledEnv *Envelope
 	var state string
 	var age time.Duration
-	deadline := time.Now().Add(500 * time.Millisecond)
+	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		state, age = tm.stalled.State()
 		if state == "stalled" {
-			break
+			envs, err := tm.journal.Read()
+			if err != nil {
+				t.Fatalf("journal.Read: %v", err)
+			}
+			for i := range envs {
+				if envs[i].Kind == "team-event:stalled" {
+					stalledEnv = &envs[i]
+					break
+				}
+			}
+			if stalledEnv != nil {
+				break
+			}
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -54,19 +73,6 @@ func TestStalledTeamDetector(t *testing.T) {
 	}
 	if age < threshold {
 		t.Errorf("last_progress_age: want >= %v, got %v", threshold, age)
-	}
-
-	// Verify envelope was written to journal.
-	envs, err := tm.journal.Read()
-	if err != nil {
-		t.Fatalf("journal.Read: %v", err)
-	}
-	var stalledEnv *Envelope
-	for i := range envs {
-		if envs[i].Kind == "team-event:stalled" {
-			stalledEnv = &envs[i]
-			break
-		}
 	}
 	if stalledEnv == nil {
 		t.Fatal("no team-event:stalled envelope found in journal")
@@ -136,7 +142,8 @@ func TestStalledDetector_RecordProgress(t *testing.T) {
 	// Advance past threshold to trigger stall.
 	clk.Advance(61 * time.Second)
 
-	deadline := time.Now().Add(500 * time.Millisecond)
+	runtime.Gosched()
+	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		state, _ := tm.stalled.State()
 		if state == "stalled" {

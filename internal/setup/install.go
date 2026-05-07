@@ -147,21 +147,18 @@ func ConfigureDeepSeek(ctx context.Context, apiKey string) error {
 	return nil
 }
 
-// writeDeepSeekConfig writes (or updates) the DeepSeek model entry in
-// ~/.config/clue-code/config.yaml using a minimal JSON config.json approach
-// compatible with the existing config package.
+// writeDeepSeekConfig writes (or updates) the DeepSeek model entry in the
+// canonical JSON config file resolved via config.JSONConfigPath(), so it always
+// writes to the same location as SetMode / LoadJSONConfig.
 func writeDeepSeekConfig(apiKey string) error {
-	home, err := os.UserHomeDir()
+	jsonPath, err := config.JSONConfigPath()
 	if err != nil {
-		return fmt.Errorf("setup: home dir: %w", err)
+		return fmt.Errorf("setup: resolve config path: %w", err)
 	}
-	dir := filepath.Join(home, ".config", "clue-code")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(jsonPath), 0o700); err != nil {
 		return fmt.Errorf("setup: create config dir: %w", err)
 	}
 
-	// Write to config.json (used by the mode/config subsystem).
-	jsonPath := filepath.Join(dir, "config.json")
 	existing := map[string]any{}
 	if data, err := os.ReadFile(jsonPath); err == nil {
 		_ = json.Unmarshal(data, &existing)
@@ -186,21 +183,21 @@ func writeDeepSeekConfig(apiKey string) error {
 }
 
 // ConfigureAnthropic validates and persists an Anthropic API key.
+// It writes to the canonical path returned by config.JSONConfigPath() so the
+// write always lands in the same file as SetMode / LoadJSONConfig.
 func ConfigureAnthropic(ctx context.Context, apiKey string) error {
 	if !strings.HasPrefix(apiKey, "sk-ant-") {
 		return fmt.Errorf("setup: Anthropic API key must start with 'sk-ant-'")
 	}
 
-	home, err := os.UserHomeDir()
+	jsonPath, err := config.JSONConfigPath()
 	if err != nil {
-		return fmt.Errorf("setup: home dir: %w", err)
+		return fmt.Errorf("setup: resolve config path: %w", err)
 	}
-	dir := filepath.Join(home, ".config", "clue-code")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(jsonPath), 0o700); err != nil {
 		return fmt.Errorf("setup: create config dir: %w", err)
 	}
 
-	jsonPath := filepath.Join(dir, "config.json")
 	existing := map[string]any{}
 	if data, err := os.ReadFile(jsonPath); err == nil {
 		_ = json.Unmarshal(data, &existing)

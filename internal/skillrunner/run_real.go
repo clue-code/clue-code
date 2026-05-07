@@ -25,6 +25,7 @@ type Runner interface {
 // PostToolUse). The engine wraps the call with SessionStart/Stop.
 type RealRunner struct {
 	modelClient model.Client
+	modelID     string // model ID to set on ChatRequest.Model; resolved at construction time
 	store       state.Store
 	hm          *hooks.Manager // nil-safe: hooks are no-op when nil
 	out         io.Writer
@@ -37,8 +38,15 @@ func NewRealRunner(c model.Client, s state.Store, hm *hooks.Manager, out io.Writ
 	if out == nil {
 		out = os.Stdout
 	}
+	// Extract the model ID from the client via the ModelID() method if available,
+	// falling back to an empty string (anthropic.go has a defensive fallback too).
+	modelID := ""
+	if mi, ok := c.(interface{ ModelID() string }); ok {
+		modelID = mi.ModelID()
+	}
 	return &RealRunner{
 		modelClient: c,
+		modelID:     modelID,
 		store:       s,
 		hm:          hm,
 		out:         out,
@@ -113,6 +121,7 @@ func (r *RealRunner) Run(ctx context.Context, skill *Skill, args []string) (retE
 	}
 
 	req := model.ChatRequest{
+		Model: r.modelID,
 		Messages: []model.Message{
 			{Role: model.RoleSystem, Content: systemPrompt},
 			{Role: model.RoleUser, Content: userContent},

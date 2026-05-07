@@ -17,18 +17,26 @@ import (
 
 // stubClient is a model.Client that returns a fixed sequence of chunks.
 type stubClient struct {
-	chunks []model.Chunk
+	chunks  []model.Chunk
+	modelID string // set to test that RealRunner propagates Model to ChatRequest
 	// block causes ChatStream to wait until ctx is cancelled before sending anything.
 	block bool
+	// lastReq captures the most recent ChatRequest for assertion.
+	lastReq model.ChatRequest
 }
 
 func (s *stubClient) Provider() string { return "stub" }
+
+// ModelID satisfies the optional interface checked by NewRealRunner so that
+// RealRunner.modelID is populated and propagated to ChatRequest.Model.
+func (s *stubClient) ModelID() string { return s.modelID }
 
 func (s *stubClient) Chat(_ context.Context, _ model.ChatRequest) (model.Response, error) {
 	return model.Response{}, nil
 }
 
-func (s *stubClient) ChatStream(ctx context.Context, _ model.ChatRequest) (<-chan model.Chunk, error) {
+func (s *stubClient) ChatStream(ctx context.Context, req model.ChatRequest) (<-chan model.Chunk, error) {
+	s.lastReq = req
 	ch := make(chan model.Chunk, len(s.chunks)+1)
 	go func() {
 		defer close(ch)
@@ -197,6 +205,32 @@ func TestRealRunner_HonorsCtxCancel(t *testing.T) {
 	}
 	if err == nil {
 		t.Error("Run: want error on cancel, got nil")
+	}
+}
+
+// TestRealRunner_SetsModelField asserts that RealRunner populates ChatRequest.Model
+// from the client's ModelID so the Anthropic API never receives an empty model field
+// (which causes HTTP 400). This is the regression test for P0-5.
+func TestRealRunner_SetsModelField(t *testing.T) {
+	sessionID := "skill-model-0"
+	st, _ := openTestStore(t, sessionID)
+
+	wantModel := "anthropic/claude-sonnet-4-5"
+	client := &stubClient{
+		modelID: wantModel,
+		chunks:  []model.Chunk{{Delta: "ok", Done: true}},
+	}
+
+	var out strings.Builder
+	runner := NewRealRunner(client, st, nil, &out)
+
+	skill := &Skill{Name: "modeltest", Body: "body"}
+	if err := runner.Run(context.Background(), skill, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if client.lastReq.Model != wantModel {
+		t.Errorf("ChatRequest.Model = %q, want %q", client.lastReq.Model, wantModel)
 	}
 }
 
