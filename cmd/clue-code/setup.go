@@ -66,9 +66,17 @@ func red(s string) string {
 
 // runSetup runs the interactive setup wizard.
 // Returns 0 on success, 1 on error, 2 on usage error.
-func runSetup(ctx context.Context, _ []string) int {
+func runSetup(ctx context.Context, args []string) int {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	// Check for --explain flag.
+	explainMode := false
+	for _, a := range args {
+		if a == "--explain" {
+			explainMode = true
+		}
+	}
 
 	// Check for resume.
 	if setup.HasProgress() {
@@ -80,18 +88,18 @@ func runSetup(ctx context.Context, _ []string) int {
 			fmt.Println()
 			ans := prompt(ctx, "Reprendre cette session ? [O/n] : ")
 			if isYes(ans) {
-				return resumeSetup(ctx, prog)
+				return resumeSetup(ctx, prog, explainMode)
 			}
 			// User declined — clear and start fresh.
 			_ = setup.ClearProgress()
 		}
 	}
 
-	return runWizard(ctx)
+	return runWizard(ctx, explainMode)
 }
 
 // runWizard executes the full 3-question wizard from the beginning.
-func runWizard(ctx context.Context) int {
+func runWizard(ctx context.Context, explainMode bool) int {
 	fmt.Print(setupBanner)
 	fmt.Println(cyan("Ce wizard vous guide en 3 questions vers la configuration ideale."))
 	fmt.Println(cyan("Appuyez sur Ctrl+C a tout moment pour annuler."))
@@ -162,28 +170,79 @@ func runWizard(ctx context.Context) int {
 		HasMacM:      runtime.GOARCH == "arm64" && runtime.GOOS == "darwin",
 	}
 
-	return runInstallPhase(ctx, answers, &prog)
+	return runInstallPhase(ctx, answers, &prog, explainMode)
 }
 
 // resumeSetup restores wizard state from a Progress snapshot.
-func resumeSetup(ctx context.Context, prog setup.Progress) int {
+func resumeSetup(ctx context.Context, prog setup.Progress, explainMode bool) int {
 	fmt.Printf("\n%s\n\n", bold("Reprise du wizard depuis l'etape : "+prog.Stage))
 	answers := prog.PartialAnswers
 	answers.HasMacM = runtime.GOARCH == "arm64" && runtime.GOOS == "darwin"
-	return runInstallPhase(ctx, answers, &prog)
+	return runInstallPhase(ctx, answers, &prog, explainMode)
 }
 
 // runInstallPhase shows the recommendation and executes the install.
-func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Progress) int {
+func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Progress, explainMode bool) int {
 	rec := setup.Recommend(answers)
 
 	fmt.Println()
 	fmt.Println("─────────────────────────────────────────────────────")
+
+	// If conflicts detected, present arbitration UI.
+	if len(rec.Conflicts) > 0 {
+		chosenProvider, chosenModel := resolveConflicts(ctx, rec.Conflicts)
+		if chosenProvider == "" {
+			return handleCancel()
+		}
+		// Re-derive rec with the user's explicit choice by finding the matching
+		// entry in RankProviders output; if not found, build a minimal rec.
+		ranked := setup.RankProviders(answers)
+		for _, ps := range ranked {
+			if ps.Provider == chosenProvider && (chosenModel == "" || ps.Model == chosenModel) {
+				rec.Primary = ps
+				rec.Provider = ps.Provider
+				rec.Model = ps.Model
+				rec.Cost = setup.CostLabel(ps)
+				rec.Steps = setup.BuildSteps(ps)
+				rec.Justification = "Choix explicite de l'utilisateur apres arbitrage des conflits"
+				break
+			}
+		}
+		// If hybrid or unknown provider, set fields directly.
+		if strings.HasPrefix(chosenProvider, "hybrid:") {
+			rec.Provider = chosenProvider
+			rec.Model = chosenModel
+			rec.Cost = "variable"
+			rec.Steps = []string{
+				"Mode hybrid: configurez d'abord Ollama (local), puis Anthropic (cloud).",
+				"Installer Ollama  : curl -fsSL https://ollama.com/install.sh | sh",
+				"Configurer Anthropic : clue-code setup (choisir Anthropic)",
+				"Activer le mode hybrid : clue-code mode hybrid",
+			}
+			rec.Justification = "Mode hybrid: local en priorite, cloud en fallback"
+		}
+	}
+
+	// Display scoring table if --explain or user asks for it.
+	if explainMode {
+		printScoringTable(answers)
+	}
+
 	fmt.Printf("%s  Recommandation : %s\n", bold(">>"), bold(cyan(strings.ToUpper(rec.Provider))))
 	fmt.Printf("   Modele       : %s\n", rec.Model)
 	fmt.Printf("   Cout         : %s\n", rec.Cost)
 	fmt.Println()
 	fmt.Printf("   %s\n", rec.Justification)
+
+	// Show top 3 alternatives when no conflicts.
+	if len(rec.Conflicts) == 0 && len(rec.Alternatives) > 0 {
+		fmt.Println()
+		fmt.Println("   Alternatives (Top 3 selon vos reponses) :")
+		for i, alt := range rec.Alternatives {
+			fmt.Printf("     %d. %-12s %-25s %s\n", i+2, alt.Provider, alt.Model, alt.Description)
+		}
+	}
+
 	fmt.Println()
 	fmt.Println("   Etapes :")
 	for i, step := range rec.Steps {
@@ -192,8 +251,22 @@ func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Pro
 	fmt.Println("─────────────────────────────────────────────────────")
 	fmt.Println()
 
-	ans := prompt(ctx, "Voulez-vous installer/configurer maintenant ? [O/n] : ")
-	if !isYes(ans) {
+	// Offer scoring table if not already shown.
+	if !explainMode {
+		detailAns, err := confirmYN(ctx, "Voir le detail du scoring ? [o/N] : ", false)
+		if err != nil {
+			return handleCancel()
+		}
+		if detailAns {
+			printScoringTable(answers)
+		}
+	}
+
+	installAns, err := confirmYN(ctx, "Voulez-vous installer/configurer maintenant ? [O/n] : ", true)
+	if err != nil {
+		return handleCancel()
+	}
+	if !installAns {
 		fmt.Println()
 		fmt.Println(yellow("Setup annule. Relancez 'clue-code setup' quand vous etes pret."))
 		_ = setup.ClearProgress()
@@ -216,7 +289,7 @@ func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Pro
 	case "deepseek":
 		fmt.Println()
 		if err := setup.OpenBrowser("https://platform.deepseek.com/api_keys"); err == nil {
-			fmt.Println(cyan("Navigateur ouvert → https://platform.deepseek.com/api_keys"))
+			fmt.Println(cyan("Navigateur ouvert -> https://platform.deepseek.com/api_keys"))
 		} else {
 			fmt.Println(yellow("Ouvrez: https://platform.deepseek.com/api_keys"))
 		}
@@ -231,7 +304,7 @@ func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Pro
 	case "anthropic":
 		fmt.Println()
 		if err := setup.OpenBrowser("https://console.anthropic.com/settings/keys"); err == nil {
-			fmt.Println(cyan("Navigateur ouvert → https://console.anthropic.com/settings/keys"))
+			fmt.Println(cyan("Navigateur ouvert -> https://console.anthropic.com/settings/keys"))
 		} else {
 			fmt.Println(yellow("Ouvrez: https://console.anthropic.com/settings/keys"))
 		}
@@ -255,8 +328,15 @@ func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Pro
 		return 0
 
 	default:
-		fmt.Fprintf(os.Stderr, "setup: provider inconnu %q\n", rec.Provider)
-		return 1
+		// hybrid or unknown providers — print steps and exit successfully.
+		fmt.Println()
+		fmt.Println(cyan("Instructions de configuration :"))
+		for i, step := range rec.Steps {
+			fmt.Printf("  %d. %s\n", i+1, step)
+		}
+		fmt.Println()
+		_ = setup.ClearProgress()
+		return 0
 	}
 
 	if installErr != nil {
@@ -285,6 +365,76 @@ func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Pro
 	return 0
 }
 
+// resolveConflicts presents each conflict with numbered arbitration options
+// and returns the chosen (provider, model). Returns ("", "") on cancel.
+func resolveConflicts(ctx context.Context, conflicts []setup.Conflict) (string, string) {
+	fmt.Println()
+	fmt.Printf("%s %s\n", bold(yellow("! CONFLITS DETECTES")),
+		yellow("— vos priorites sont en tension. Choisissez comment les arbitrer."))
+	fmt.Println()
+
+	var chosenProvider, chosenModel string
+
+	for ci, c := range conflicts {
+		fmt.Printf("%s Conflit %d/%d : %s\n", bold(">>"), ci+1, len(conflicts), bold(c.Description))
+		fmt.Printf("   %s\n", c.Reason)
+		fmt.Println()
+		for i, opt := range c.Options {
+			fmt.Printf("   [%d] %s\n", i+1, bold(opt.Label))
+			fmt.Printf("       Contre-partie : %s\n", opt.Tradeoff)
+			fmt.Printf("       Cout          : %s\n", opt.CostNote)
+			fmt.Println()
+		}
+
+		validChoices := make([]string, len(c.Options))
+		for i := range c.Options {
+			validChoices[i] = fmt.Sprintf("%d", i+1)
+		}
+		choice := promptChoice(ctx, fmt.Sprintf("Votre choix [1-%d] : ", len(c.Options)), validChoices)
+		if choice == "" {
+			return "", ""
+		}
+
+		// Parse choice index (1-based).
+		idx := 0
+		for i, v := range validChoices {
+			if choice == v {
+				idx = i
+				break
+			}
+		}
+		chosen := c.Options[idx]
+		chosenProvider = chosen.Provider
+		chosenModel = chosen.Model
+		fmt.Println()
+	}
+
+	return chosenProvider, chosenModel
+}
+
+// printScoringTable renders the full provider scoring table with weighted totals.
+func printScoringTable(a setup.Answers) {
+	w := setup.WeightsFromAnswers(a)
+	ranked := setup.RankProviders(a)
+
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────────────────────────────")
+	fmt.Println(bold("  Tableau de scoring detaille"))
+	fmt.Printf("  Poids : Prive=%.0f  Cout=%.0f  Qualite=%.0f  Offline=%.0f\n",
+		w.Privacy, w.Cost, w.Quality, w.Offline)
+	fmt.Println()
+	fmt.Printf("  %-12s %-25s %6s %6s %8s %8s %8s\n",
+		"Provider", "Modele", "Prive", "Cout", "Qualite", "Offline", "TOTAL")
+	fmt.Println("  " + strings.Repeat("-", 73))
+	for _, p := range ranked {
+		total := setup.ScoreProvider(p, w)
+		fmt.Printf("  %-12s %-25s %6d %6d %8d %8d %8.0f\n",
+			p.Provider, p.Model, p.Privacy, p.Cost, p.Quality, p.Offline, total)
+	}
+	fmt.Println("─────────────────────────────────────────────────────────────────────────────")
+	fmt.Println()
+}
+
 // handleCancel prints a cancellation message and returns exit code 1.
 func handleCancel() int {
 	fmt.Println()
@@ -298,14 +448,53 @@ func isYes(s string) bool {
 	return s == "" || s == "o" || s == "y" || s == "yes" || s == "oui"
 }
 
+// confirmYN prompts for a strict O/N answer with re-prompt on invalid input.
+// defaultVal is used when the user presses Enter without typing.
+// Returns an error after 3 consecutive invalid responses.
+func confirmYN(ctx context.Context, msg string, defaultVal bool) (bool, error) {
+	const maxAttempts = 3
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		line := prompt(ctx, msg)
+		if line == "" && ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		trimmed := strings.TrimSpace(strings.ToLower(line))
+		switch trimmed {
+		case "":
+			return defaultVal, nil
+		case "o", "y", "oui", "yes":
+			return true, nil
+		case "n", "non", "no":
+			return false, nil
+		default:
+			fmt.Printf("  %s Reponse non comprise. Tapez O ou N.\n", yellow("?"))
+		}
+	}
+	fmt.Println(red("Trop de tentatives invalides. Setup annule."))
+	return false, fmt.Errorf("trop de tentatives invalides")
+}
+
+// stdinReader is the io.Reader used by prompt(). It defaults to os.Stdin but
+// tests can substitute a pipe by calling initStdinScanner with a new reader.
+var stdinScanner *bufio.Scanner
+
+// initStdinScanner resets the package-level stdin scanner to read from r.
+// Called once at startup and by tests to inject a fake stdin.
+func initStdinScanner() {
+	stdinScanner = bufio.NewScanner(os.Stdin)
+}
+
+func init() {
+	initStdinScanner()
+}
+
 // prompt prints msg and reads a line from stdin. Returns "" if ctx is done.
 func prompt(ctx context.Context, msg string) string {
 	fmt.Print(msg)
 	ch := make(chan string, 1)
 	go func() {
-		sc := bufio.NewScanner(os.Stdin)
-		if sc.Scan() {
-			ch <- sc.Text()
+		if stdinScanner.Scan() {
+			ch <- stdinScanner.Text()
 		} else {
 			ch <- ""
 		}
