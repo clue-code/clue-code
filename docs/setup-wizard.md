@@ -127,6 +127,83 @@ Top cloud models receive your prompts. Options:
 
 ---
 
+## Choisir une alternative (Phase 5.3)
+
+After the recommendation is displayed, the wizard presents an interactive
+numbered menu instead of a simple O/N confirm. This applies to the
+**conflict-free path** only; conflict arbitration (Phase 5.1) still takes
+precedence when tensions are detected.
+
+### Menu format
+
+```
+Quel provider voulez-vous installer ?
+
+  [1] anthropic     claude-sonnet-4-6         Top qualite, cher  ← recommande
+  [2] openrouter    various                   Acces 100+ modeles
+  [3] deepseek      deepseek-chat             Cloud, 53x moins cher que Claude
+
+  [s] Voir le detail du scoring
+  [r] Refaire les questions
+  [n] Annuler
+
+Votre choix [1] : _
+```
+
+### Actions
+
+| Input | Effect |
+|-------|--------|
+| Enter (vide) | Accepte la recommandation primaire [1] (P7 default) |
+| `1` | Installe le provider recommande |
+| `2` | Installe la 2e option (1ere alternative) |
+| `3` | Installe la 3e option (2e alternative, si disponible) |
+| `s` | Affiche le tableau de scoring detaille, puis re-affiche le menu |
+| `r` | Efface les reponses en memoire et relance le wizard depuis Q1 |
+| `n` | Annule proprement — aucune modification effectuee |
+
+### Validation
+
+- Invalid input (e.g. `4`, `abc`, `!`) triggers re-prompt with hint
+- After **3 consecutive invalid** responses the wizard exits with an error
+- `[r]` (restart) resets answers in memory only — `setup-progress.json` is
+  cleared so the next run starts fresh from Q1
+
+### Walkthrough example (answers 2/2/2 — quality, cloud, connected)
+
+```
+>> Recommandation : ANTHROPIC
+   Modele       : claude-sonnet-4-6
+   Cout         : $15.00/M tokens
+
+   qualite top niveau
+
+   Alternatives (Top 3 selon vos reponses) :
+     2. openrouter    various                   Acces 100+ modeles
+     3. groq          llama-3.3-70b             Ultra-rapide cloud
+
+   Etapes :
+     1. Creer un compte Anthropic : https://console.anthropic.com
+     ...
+─────────────────────────────────────────────────────
+
+Quel provider voulez-vous installer ?
+
+  [1] anthropic     claude-sonnet-4-6         Top qualite, cher  ← recommande
+  [2] openrouter    various                   Acces 100+ modeles
+  [3] groq          llama-3.3-70b             Ultra-rapide cloud
+
+  [s] Voir le detail du scoring
+  [r] Refaire les questions
+  [n] Annuler
+
+Votre choix [1] : 2        ← user picks openrouter
+```
+
+The wizard then continues with the openrouter install flow.
+
+---
+
 ## Strict Y/N Validation (O7)
 
 All yes/no prompts use strict validation with re-prompt on invalid input:

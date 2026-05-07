@@ -519,3 +519,185 @@ func TestSetup_Recommend_QualityOffline_NotLlama32(t *testing.T) {
 			rec.Primary.Provider, rec.Primary.Model)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// chooseProvider tests (Phase 5.3 — P1-P7 alternative choice menu)
+// ---------------------------------------------------------------------------
+
+// makeRec builds a conflict-free Recommendation with a primary and two
+// alternatives, suitable for exercising chooseProvider.
+func makeRec() setup.Recommendation {
+	a := setup.Answers{PriorityCost: true, Offline: false, Sensitive: false}
+	rec := setup.Recommend(a)
+	// Ensure no conflicts (required for the menu path).
+	if len(rec.Conflicts) != 0 {
+		// Fallback: build manually so the test is deterministic.
+		rec.Conflicts = nil
+		rec.Primary = setup.ProviderScore{Provider: "deepseek", Model: "deepseek-chat", Description: "Cloud cheapest"}
+		rec.Alternatives = []setup.ProviderScore{
+			{Provider: "openrouter", Model: "various", Description: "100+ modeles"},
+			{Provider: "groq", Model: "llama-3.3-70b", Description: "Ultra-rapide"},
+		}
+	}
+	return rec
+}
+
+// TestChooseProvider_DefaultPrimary verifies that empty input (Enter) returns
+// the primary recommendation with action=install (P7).
+func TestChooseProvider_DefaultPrimary(t *testing.T) {
+	pipeStdin(t, "\n")
+	ctx := context.Background()
+	rec := makeRec()
+	a := setup.Answers{PriorityCost: true}
+	selected, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "install" {
+		t.Errorf("action = %q, want install", action)
+	}
+	if selected.Provider != rec.Primary.Provider {
+		t.Errorf("selected = %q, want primary %q", selected.Provider, rec.Primary.Provider)
+	}
+}
+
+// TestChooseProvider_SelectPrimary verifies that "1" selects the primary.
+func TestChooseProvider_SelectPrimary(t *testing.T) {
+	pipeStdin(t, "1\n")
+	ctx := context.Background()
+	rec := makeRec()
+	a := setup.Answers{PriorityCost: true}
+	selected, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "install" {
+		t.Errorf("action = %q, want install", action)
+	}
+	if selected.Provider != rec.Primary.Provider {
+		t.Errorf("selected provider = %q, want %q", selected.Provider, rec.Primary.Provider)
+	}
+}
+
+// TestChooseProvider_SelectAlt2 verifies that "2" returns alternatives[0] (P2).
+func TestChooseProvider_SelectAlt2(t *testing.T) {
+	pipeStdin(t, "2\n")
+	ctx := context.Background()
+	rec := makeRec()
+	if len(rec.Alternatives) == 0 {
+		t.Skip("no alternatives available for this scoring configuration")
+	}
+	a := setup.Answers{PriorityCost: true}
+	selected, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "install" {
+		t.Errorf("action = %q, want install", action)
+	}
+	if selected.Provider != rec.Alternatives[0].Provider {
+		t.Errorf("selected = %q, want alt[0] %q", selected.Provider, rec.Alternatives[0].Provider)
+	}
+}
+
+// TestChooseProvider_SelectAlt3 verifies that "3" returns alternatives[1] (P2).
+func TestChooseProvider_SelectAlt3(t *testing.T) {
+	pipeStdin(t, "3\n")
+	ctx := context.Background()
+	rec := makeRec()
+	if len(rec.Alternatives) < 2 {
+		t.Skip("fewer than 2 alternatives for this scoring configuration")
+	}
+	a := setup.Answers{PriorityCost: true}
+	selected, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "install" {
+		t.Errorf("action = %q, want install", action)
+	}
+	if selected.Provider != rec.Alternatives[1].Provider {
+		t.Errorf("selected = %q, want alt[1] %q", selected.Provider, rec.Alternatives[1].Provider)
+	}
+}
+
+// TestChooseProvider_Explain verifies that "s" triggers the explain action then
+// re-prompts; a subsequent "1" selects primary (P3).
+func TestChooseProvider_Explain(t *testing.T) {
+	// "s" triggers scoring table print then menu re-display; "1" selects primary.
+	pipeStdin(t, "s\n1\n")
+	ctx := context.Background()
+	rec := makeRec()
+	a := setup.Answers{PriorityCost: true}
+	selected, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "install" {
+		t.Errorf("action = %q, want install after s then 1", action)
+	}
+	if selected.Provider != rec.Primary.Provider {
+		t.Errorf("selected = %q, want primary %q", selected.Provider, rec.Primary.Provider)
+	}
+}
+
+// TestChooseProvider_Restart verifies that "r" returns action=restart (P4).
+func TestChooseProvider_Restart(t *testing.T) {
+	pipeStdin(t, "r\n")
+	ctx := context.Background()
+	rec := makeRec()
+	a := setup.Answers{PriorityCost: true}
+	_, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "restart" {
+		t.Errorf("action = %q, want restart", action)
+	}
+}
+
+// TestChooseProvider_Cancel verifies that "n" returns action=cancel (P5).
+func TestChooseProvider_Cancel(t *testing.T) {
+	pipeStdin(t, "n\n")
+	ctx := context.Background()
+	rec := makeRec()
+	a := setup.Answers{PriorityCost: true}
+	_, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "cancel" {
+		t.Errorf("action = %q, want cancel", action)
+	}
+}
+
+// TestChooseProvider_InvalidThenValid verifies that an invalid input is
+// re-prompted and a subsequent valid choice is accepted (P6).
+func TestChooseProvider_InvalidThenValid(t *testing.T) {
+	pipeStdin(t, "abc\n1\n")
+	ctx := context.Background()
+	rec := makeRec()
+	a := setup.Answers{PriorityCost: true}
+	selected, action, err := chooseProvider(ctx, rec, a, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != "install" {
+		t.Errorf("action = %q, want install", action)
+	}
+	if selected.Provider != rec.Primary.Provider {
+		t.Errorf("selected = %q, want primary %q", selected.Provider, rec.Primary.Provider)
+	}
+}
+
+// TestChooseProvider_MaxAttempts verifies that 3 invalid inputs return an error (P6).
+func TestChooseProvider_MaxAttempts(t *testing.T) {
+	pipeStdin(t, "abc\nxyz\n999\n")
+	ctx := context.Background()
+	rec := makeRec()
+	a := setup.Answers{PriorityCost: true}
+	_, _, err := chooseProvider(ctx, rec, a, false)
+	if err == nil {
+		t.Error("expected error after 3 invalid attempts, got nil")
+	}
+}
