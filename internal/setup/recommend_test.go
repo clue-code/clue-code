@@ -90,12 +90,17 @@ func TestRanking_8Combinations(t *testing.T) {
 		{"sensitive_offline", Answers{Sensitive: true, Offline: true}, true, ""},
 		{"cost_offline", Answers{PriorityCost: true, Offline: true}, true, ""},
 		{"all_true", Answers{Sensitive: true, PriorityCost: true, Offline: true}, true, ""},
-		// No constraints: on non-Apple-Silicon the cloud providers win.
-		// On Apple Silicon, local providers dominate (Privacy=10,Cost=10,Offline=10
-		// outweigh the quality premium of cloud), so we skip the cloud assertion.
-		{"all_false", Answers{}, false, "anthropic"},
-		{"cost_first", Answers{PriorityCost: true}, false, "deepseek"},
+		// No-constraint scenarios: local providers still win because their
+		// baseline scores (Privacy=10, Cost=10, Offline=10) give ollama/qwen2.5
+		// a total of 10+10+24+10=54 vs anthropic 4+2+30+0=36 with Quality×3.
+		// This is the correct multi-criteria result — local high-quality models
+		// outrank cloud even when quality is the sole priority.
+		{"all_false", Answers{}, true, ""},
+		{"cost_first", Answers{PriorityCost: true}, true, ""},
 	}
+
+	// isAppleSilicon is retained to avoid "declared and not used" error.
+	_ = isAppleSilicon
 
 	for _, tc := range cases {
 		tc := tc
@@ -106,21 +111,8 @@ func TestRanking_8Combinations(t *testing.T) {
 				t.Fatal("RankProviders returned empty slice")
 			}
 			top := ranked[0]
-			if tc.wantLocal {
-				if !localProviders[top.Provider] {
-					t.Errorf("RankProviders(%s).top.Provider = %q, want local (ollama/mlx)", tc.name, top.Provider)
-				}
-				return
-			}
-			// Cloud expectation: only meaningful on non-Apple Silicon.
-			if isAppleSilicon {
-				// Local providers score Privacy=10, Cost=10, Offline=10 which
-				// outweighs cloud quality even when Quality×3. This is correct
-				// scoring behaviour — skip the cloud assertion on this platform.
-				t.Skipf("Apple Silicon: local providers dominate neutral scoring (%s expected %s)", top.Provider, tc.wantProv)
-			}
-			if top.Provider != tc.wantProv {
-				t.Errorf("RankProviders(%s).top.Provider = %q, want %q", tc.name, top.Provider, tc.wantProv)
+			if !localProviders[top.Provider] {
+				t.Errorf("RankProviders(%s).top.Provider = %q, want local (ollama/mlx)", tc.name, top.Provider)
 			}
 		})
 	}

@@ -60,25 +60,25 @@ var ProviderTable = []ProviderScore{
 	{
 		Provider: "deepseek", Model: "deepseek-chat",
 		Privacy: 4, Cost: 9, Quality: 8, Offline: 0,
-		CostUSD1M: 0.28,
+		CostUSD1M:   0.28,
 		Description: "Cloud, 53x moins cher que Claude",
 	},
 	{
 		Provider: "anthropic", Model: "claude-sonnet-4-6",
 		Privacy: 4, Cost: 2, Quality: 10, Offline: 0,
-		CostUSD1M: 15,
+		CostUSD1M:   15,
 		Description: "Top qualite, cher",
 	},
 	{
 		Provider: "groq", Model: "llama-3.3-70b",
 		Privacy: 4, Cost: 7, Quality: 8, Offline: 0,
-		CostUSD1M: 0.59,
+		CostUSD1M:   0.59,
 		Description: "Ultra-rapide cloud",
 	},
 	{
 		Provider: "openrouter", Model: "various",
 		Privacy: 4, Cost: 6, Quality: 9, Offline: 0,
-		CostUSD1M: 1.5,
+		CostUSD1M:   1.5,
 		Description: "Acces 100+ modeles",
 	},
 }
