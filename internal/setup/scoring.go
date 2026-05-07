@@ -92,20 +92,24 @@ type Weights struct {
 }
 
 // WeightsFromAnswers builds dimension weights from the user's wizard answers.
-// A dimension gets weight 3 if it is a user priority, 1 otherwise.
+// Dimensions not explicitly prioritized by the user receive weight 0 so that
+// a provider's high score on an unrequested dimension (e.g. Ollama Privacy=10
+// when the user said "cloud OK") cannot overwhelm a lower score on the
+// dimension the user actually cares about.
+// A prioritized dimension gets weight 5.
 func WeightsFromAnswers(a Answers) Weights {
-	w := Weights{Privacy: 1, Cost: 1, Quality: 1, Offline: 1}
+	w := Weights{} // all zero by default
 	if a.Sensitive {
-		w.Privacy = 3
+		w.Privacy = 5
 	}
 	if a.PriorityCost {
-		w.Cost = 3
+		w.Cost = 5
 	} else {
 		// not cost-first means quality-first
-		w.Quality = 3
+		w.Quality = 5
 	}
 	if a.Offline {
-		w.Offline = 3
+		w.Offline = 5
 	}
 	return w
 }
