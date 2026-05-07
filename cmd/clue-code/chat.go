@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/clue-code/clue-code/internal/config"
 	"github.com/clue-code/clue-code/internal/model"
 	"golang.org/x/term"
 )
@@ -79,7 +80,7 @@ func runChat(args []string) {
 	}
 
 	if modelID == "" {
-		modelID = cfg.DefaultModel
+		modelID = resolveModelID(cfg)
 	}
 
 	client, err := model.NewClient(cfg, modelID)
@@ -202,4 +203,41 @@ func isStdinTTY() bool {
 func isSetupYes(s string) bool {
 	s = strings.TrimSpace(strings.ToLower(s))
 	return s == "" || s == "o" || s == "y" || s == "yes" || s == "oui"
+}
+
+// resolveModelID selects the best model ID given the persisted mode from
+// config.json. Priority: mode > config.yaml default_model.
+//
+//   - mode=local  → first model with a local provider (ollama, mlx); fallback cfg.DefaultModel
+//   - mode=hybrid → prefer cloud default_provider if configured, else cfg.DefaultModel
+//   - mode=cloud  → cfg.DefaultModel (already set by mergeJSONConfigKeys to anthropic/deepseek)
+//   - no mode / default → cfg.DefaultModel
+func resolveModelID(cfg *model.Config) string {
+	jsonPath, err := config.JSONConfigPath()
+	if err != nil {
+		return cfg.DefaultModel
+	}
+	pk, err := config.LoadJSONConfig(jsonPath)
+	if err != nil || pk.Mode == "" {
+		return cfg.DefaultModel
+	}
+
+	switch pk.Mode {
+	case config.ModeLocal:
+		// Prefer the first local (ollama/mlx) provider entry.
+		for _, mc := range cfg.Models {
+			if mc.Provider == "ollama" || mc.Provider == "mlx" {
+				return mc.ID
+			}
+		}
+		return cfg.DefaultModel
+
+	case config.ModeHybrid, config.ModeCloud:
+		// cfg.DefaultModel was already updated by mergeJSONConfigKeys to the
+		// wizard-configured provider (anthropic or deepseek).
+		return cfg.DefaultModel
+
+	default:
+		return cfg.DefaultModel
+	}
 }
