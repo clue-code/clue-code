@@ -110,8 +110,15 @@ func (c *anthropicClient) buildRequest(ctx context.Context, req ChatRequest, str
 		}
 	}
 
+	// Strip provider prefix (e.g. "anthropic/claude-sonnet-4-5" → "claude-sonnet-4-5")
+	// so the Anthropic API receives only the bare model name.
+	apiModel := req.Model
+	if after, ok := strings.CutPrefix(apiModel, "anthropic/"); ok {
+		apiModel = after
+	}
+
 	body := anthropicRequest{
-		Model:     req.Model,
+		Model:     apiModel,
 		System:    systemBlocks,
 		Messages:  convMsgs,
 		MaxTokens: maxTok,

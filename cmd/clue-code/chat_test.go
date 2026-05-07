@@ -194,7 +194,7 @@ func TestModelFlag_Routing(t *testing.T) {
 				APIKeyEnv: "DEEPSEEK_UNREACHABLE",
 			},
 			{
-				ID:        "anthropic/claude-sonnet-4-6",
+				ID:        "anthropic/claude-sonnet-4-5",
 				Provider:  "anthropic",
 				Endpoint:  routeSrv.URL + "/v1",
 				APIKeyEnv: "ANTHROPIC_API_KEY_TEST",
@@ -205,7 +205,7 @@ func TestModelFlag_Routing(t *testing.T) {
 	// Ensure the deepseek key is NOT set so NewClient would fail if it's picked.
 	_ = os.Unsetenv("DEEPSEEK_UNREACHABLE")
 
-	client, err := model.NewClient(cfg, "anthropic/claude-sonnet-4-6")
+	client, err := model.NewClient(cfg, "anthropic/claude-sonnet-4-5")
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestModelFlag_Routing(t *testing.T) {
 	}
 
 	_, err = client.Chat(t.Context(), model.ChatRequest{
-		Model:    "anthropic/claude-sonnet-4-6",
+		Model:    "anthropic/claude-sonnet-4-5",
 		Messages: []model.Message{{Role: model.RoleUser, Content: "hello"}},
 	})
 	if err != nil {
@@ -533,10 +533,10 @@ func TestChat_AnthropicKeyFromConfig(t *testing.T) {
 
 	// Build a config that includes an anthropic model pointing at the stub.
 	cfg := &model.Config{
-		DefaultModel: "anthropic/claude-sonnet-4-6",
+		DefaultModel: "anthropic/claude-sonnet-4-5",
 		Models: []model.ModelConfig{
 			{
-				ID:        "anthropic/claude-sonnet-4-6",
+				ID:        "anthropic/claude-sonnet-4-5",
 				Provider:  "anthropic",
 				Endpoint:  srv.URL + "/v1",
 				APIKeyEnv: "CLUE_CODE_ANTHROPIC_API_KEY",
@@ -551,7 +551,7 @@ func TestChat_AnthropicKeyFromConfig(t *testing.T) {
 		t.Setenv("CLUE_CODE_ANTHROPIC_API_KEY", "sk-ant-test-key")
 	}
 
-	client, err := model.NewClient(cfg, "anthropic/claude-sonnet-4-6")
+	client, err := model.NewClient(cfg, "anthropic/claude-sonnet-4-5")
 	if err != nil {
 		t.Fatalf("NewClient with anthropic config key: %v", err)
 	}
@@ -560,7 +560,7 @@ func TestChat_AnthropicKeyFromConfig(t *testing.T) {
 	}
 
 	resp, err := client.Chat(t.Context(), model.ChatRequest{
-		Model:    "anthropic/claude-sonnet-4-6",
+		Model:    "anthropic/claude-sonnet-4-5",
 		Messages: []model.Message{{Role: model.RoleUser, Content: "hello"}},
 	})
 	if err != nil {

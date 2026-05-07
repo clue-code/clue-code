@@ -64,7 +64,7 @@ var ProviderTable = []ProviderScore{
 		Description: "Cloud, 53x moins cher que Claude",
 	},
 	{
-		Provider: "anthropic", Model: "claude-sonnet-4-6",
+		Provider: "anthropic", Model: "claude-sonnet-4-5",
 		Privacy: 4, Cost: 2, Quality: 10, Offline: 0,
 		CostUSD1M:   15,
 		Description: "Top qualite, cher",

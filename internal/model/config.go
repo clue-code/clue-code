@@ -120,12 +120,12 @@ func mergeJSONConfigKeys(cfg *Config) {
 		}
 		if !hasAnthropic {
 			cfg.Models = append(cfg.Models, ModelConfig{
-				ID:        "anthropic/claude-sonnet-4-6",
+				ID:        "anthropic/claude-sonnet-4-5",
 				Provider:  "anthropic",
 				Endpoint:  "https://api.anthropic.com/v1",
 				MaxTokens: 8192,
 			})
-			cfg.DefaultModel = "anthropic/claude-sonnet-4-6"
+			cfg.DefaultModel = "anthropic/claude-sonnet-4-5"
 		}
 	}
 

@@ -32,7 +32,7 @@ The token summary is always written to stderr on completion.
 
 Examples:
   clue-code chat "hello"
-  clue-code chat --model anthropic/claude-sonnet-4-6 "explain Go interfaces"
+  clue-code chat --model anthropic/claude-sonnet-4-5 "explain Go interfaces"
   clue-code chat --no-stream "summarise this" < input.txt
   clue-code chat --json "count to 5" | jq .delta
 `
