@@ -129,7 +129,7 @@ func TestStalledDetector_RecordProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TeamCreate: %v", err)
 	}
-	defer tm.Close()
+	defer func() { _ = tm.Close() }()
 
 	_ = tm.Inbox("worker-a")
 
@@ -216,7 +216,7 @@ func TestStalledDetector_NoFireBeforeThreshold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TeamCreate: %v", err)
 	}
-	defer tm.Close()
+	defer func() { _ = tm.Close() }()
 
 	// Advance only half the threshold.
 	clk.Advance(30 * time.Second)

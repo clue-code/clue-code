@@ -23,7 +23,7 @@ func TestFanOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TeamCreate: %v", err)
 	}
-	defer tm.Close()
+	defer func() { _ = tm.Close() }()
 
 	var wg sync.WaitGroup
 	for i := 0; i < 4; i++ {
@@ -158,7 +158,7 @@ func TestBackpressure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TeamCreate: %v", err)
 	}
-	defer tm.Close()
+	defer func() { _ = tm.Close() }()
 
 	const workerID = "worker-0"
 	// Ensure mailbox exists.
