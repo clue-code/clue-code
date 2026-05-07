@@ -1,6 +1,6 @@
 # CLUE CODE — Phase 4 Implementation Plan
 
-**Status:** DRAFT for RALPLAN consensus (deliberate mode)
+**Status:** SHIPPED — Track D COMPLETE (PR #9 mergeable, D1-D12 PASS)
 **Author:** Planner agent
 **Date:** 2026-05-05
 **Scope:** Track A (Hooks / L6) · Track B (State primitives / L0+L5) · Track C (Bubble Tea TUI / L8) · Track D (Team primitives / L5)
@@ -753,8 +753,8 @@ type Transport interface {
   - **Checkpoint α (consensus re-validate):** Architect reviews `state.Store` interface (incl. `WriteWithRetry`, `Append`); Critic confirms ADR-2 honesty rationale and the Phase 5 SQLite gate (10 projects × 5 sessions) is documented. Required before merging A/C/D.
 - **Sub-phase 4.2 — Track A (hooks) + Track A.5 (`internal/skillrunner/`)** — 1 PR (or fast-follow). Depends on B for `hooks.log` location and session registry. Includes `internal/hooks/**` (incl. `testdata/{trivial,recursive,infinite-loop}-hook.yaml`) AND `internal/skillrunner/{loader.go, engine.go, hooks_glue.go, engine_test.go, testdata/synthetic-skill, testdata/malformed-yaml-skill, testdata/recursive-skill}`. Acceptance criteria E1-E5 (Track A.5 lifecycle, recursion guard, panic-around-lifecycle, graceful cancel, ordered-events) merge in this PR.
   - **Checkpoint β:** Critic verifies depth guard implementation matches Pre-mortem #1 + the in-process per-session recursion counter (defense-in-depth against `unset CLUE_CODE_HOOK_DEPTH`); security-reviewer audits allowlist defaults against the §3.A.2 truth table; A3 hermetic test (CRITIC-8) lands.
-- **Sub-phase 4.3 — Track D (team)** — 1 PR. Depends on B (locking helpers) and A (fires `PreToolUse`/`PostToolUse` around `TaskUpdate`). Ships BOTH `inproc.go` AND `subprocess.go` transports + `team demo` CLI + `cmd/clue-code/team_worker.go` subcommand. Acceptance criteria D1-D12 merge in this PR (D9 stderr isolation, D10 fork-bomb guard, D11 envelope version rejection, D12 journal-rebuild).
-  - **Checkpoint γ:** Architect reviews wire-first `Transport` interface (NDJSON envelopes over `io.ReadWriter` with `Version` field); test-engineer confirms D6 latency assertion AND D7 subprocess demo AND D8 stalled-team detector AND D9-D12 are in CI.
+- **Sub-phase 4.3 — Track D (team)** — 1 PR. **STATUS: SHIPPED. D1-D12 PASS.** Ships BOTH `inproc.go` AND `subprocess.go` transports + `team demo` CLI + `cmd/clue-code/team_worker.go` subcommand. Acceptance criteria D1-D12 in CI (D9 stderr isolation, D10 fork-bomb guard, D11 envelope version rejection, D12 journal-rebuild).
+  - **Checkpoint γ:** COMPLETE. Architect reviewed wire-first `Transport` interface (NDJSON envelopes over `io.ReadWriter` with `Version` field); D6 latency assertion AND D7 subprocess demo AND D8 stalled-team detector AND D9-D12 confirmed in CI.
 - **Sub-phase 4.4 — Track C (TUI, full views)** — 1 PR. Depends on B/A/D being merged so all views have real data sources. Adds the remaining `internal/tui/views/{sessions,agents,skills,tokens,hooks}.go` and `cmd/clue-code/tui.go` + `tui_stub.go`.
   - **Checkpoint δ (final consensus):** All three reviewers (Architect/Critic/Security) sign off; release notes drafted; `CHANGELOG.md` updated; doctor command extended (`clue-code doctor` reports hook count, session count, team count); CI publishes BOTH artifacts (`clue-code` + `clue-code-tui`).
 

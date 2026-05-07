@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4.3 — Team primitives
+
+#### Added
+- feat(team): NDJSON transport (inproc + subprocess), envelope v=1 — `internal/team/transport.go`, `inproc.go`, `subprocess.go`
+- feat(team): scheduler DAG (topological), bounded mailbox 256, crash-resume — `internal/team/task.go`, `journal.go`
+- feat(team): stalled detector + panic recovery (clock injection) — `internal/team/stalled.go`
+- feat(team): CLI `clue-code team list|inspect|tail|demo` + `team-worker` subcommand — `cmd/clue-code/team.go`, `team_worker.go`
+- feat(team): forkbomb caps (`MaxTeamWorkers=20`, depth=1 via `CLUE_CODE_TEAM_DEPTH`) — `internal/team/team.go`
+- feat(team): journal torn-tail recovery + cache rebuild from journal — `internal/team/journal.go`
+- test(team): p99 `SendMessage` < 1 ms (HdrHistogram) — `internal/team.TestSendMessage_P99Latency`
+- skills: ultrawork + team re-enabled (was DEFERRED post-Phase 4.6, now wired to `internal/team` API)
+- docs: `docs/team-transport.md` — wire format, journal layout, CLI operator guide, acceptance checklist D1-D12
+
 ### Added
 - Initial repository scaffolding (Phase 0 — Fondations)
 - Go module structure with `cmd/`, `internal/`, `agents/`, `skills/`, `hooks/`

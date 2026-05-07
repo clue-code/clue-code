@@ -918,6 +918,45 @@ Workers can operate in isolated git worktrees to prevent file conflicts between 
 - Branch names are sanitized via `sanitizeName()` to prevent injection
 - All paths are validated against directory traversal
 
+## CLI Operator Surface
+
+The `clue-code team` command provides read-only operator views into running teams.
+Team creation is driven by this skill; the CLI surfaces state for inspection only
+(except `team demo` which is a self-contained hello-world).
+
+| Subcommand | Description |
+|------------|-------------|
+| `clue-code team list [project-root]` | List all teams under `<project-root>/.clue-code/teams/` |
+| `clue-code team inspect <id> [project-root]` | Show task counts, worker count, and stalled state |
+| `clue-code team tail <id> [project-root]` | Follow `journal.ndjson` in real time (Ctrl-C to stop) |
+| `clue-code team demo --transport={inproc,subprocess}` | Run 2-worker hello-world; verifies transport end-to-end |
+
+Project root defaults to `$CLUE_CODE_PROJECT_ROOT` or `cwd`.
+
+### internal/team Go API
+
+The skill orchestrator calls these functions directly from `internal/team`:
+
+```go
+// Create a team; returns *Team handle.
+t, err := team.TeamCreate(team.Spec{Workers: n, ProjectRoot: root})
+
+// Deliver a message (non-blocking; returns ErrMailboxFull if mailbox is full).
+err = t.SendMessage(from, to, payload)
+
+// Receive from an agent's inbox channel.
+inbox, _ := t.Inbox(agentRef)
+msg := <-inbox
+
+// Crash-resume: re-attach to an existing team by replaying its journal.
+t, err = team.Open(teamID, projectRoot)
+
+// Teardown.
+t.Close()
+```
+
+Full wire format documentation: `docs/team-transport.md`.
+
 ## Gotchas
 
 1. **Internal tasks pollute TaskList** -- When a teammate is spawned, the system auto-creates an internal task with `metadata._internal: true`. These appear in `TaskList` output. Filter them when counting real task progress. The subject of an internal task is the teammate's name.
