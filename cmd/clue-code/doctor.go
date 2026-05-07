@@ -24,8 +24,14 @@ import (
 func runDoctor(args []string) {
 	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
 	verbose := fs.Bool("v", false, "verbose output")
+	brief := fs.Bool("brief", false, "compact 3-line output (for install.sh)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+
+	if *brief {
+		runDoctorBrief()
+		return
 	}
 
 	fmt.Println("CLUE CODE — doctor")
@@ -83,6 +89,60 @@ func runDoctor(args []string) {
 
 	fmt.Println()
 	fmt.Println("Status: ready.")
+}
+
+// runDoctorBrief prints a 3-line compact status for use by install.sh.
+// Format:
+//
+//	✓ RAM X GB libre
+//	✓ Disque X GB libre
+//	✓/⚠ IA modele <provider or "Aucun modele configure">
+func runDoctorBrief() {
+	// RAM
+	mb, err := readTotalRAMMB()
+	if err != nil {
+		fmt.Printf("  ⚠ RAM              impossible de determiner\n")
+	} else {
+		gb := float64(mb) / 1024.0
+		if mb < 8*1024 {
+			fmt.Printf("  ⚠ RAM              %.1f GB libre (recommande: 16 GB+)\n", gb)
+		} else {
+			fmt.Printf("  ✓ RAM              %.1f GB libre\n", gb)
+		}
+	}
+
+	// Disk
+	cwd, _ := os.Getwd()
+	if cwd == "" {
+		cwd = "/"
+	}
+	freeMB, err := freeDiskMB(cwd)
+	if err != nil {
+		fmt.Printf("  ⚠ Disque           impossible de determiner\n")
+	} else {
+		gb := float64(freeMB) / 1024.0
+		if freeMB < 500 {
+			fmt.Printf("  ✗ Disque           %.1f GB libre — ATTENTION: <500 MB\n", gb)
+		} else {
+			fmt.Printf("  ✓ Disque           %.1f GB libre\n", gb)
+		}
+	}
+
+	// AI model
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := ollamaVersion(ctx); err == nil {
+		fmt.Println("  ✓ IA modele        Ollama actif")
+		return
+	}
+	// Check env keys
+	for _, k := range []string{"DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY"} {
+		if os.Getenv(k) != "" {
+			fmt.Printf("  ✓ IA modele        %s configure\n", k)
+			return
+		}
+	}
+	fmt.Println("  ⚠ IA modele        Aucun modele configure — lancez: clue-code setup")
 }
 
 // checkRAM reads total physical RAM and prints it.
