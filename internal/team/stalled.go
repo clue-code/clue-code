@@ -3,7 +3,6 @@ package team
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -239,16 +238,4 @@ func (sd *StalledDetector) MailboxDepths() map[string]int {
 		out[id] = len(ch)
 	}
 	return out
-}
-
-// stalledPayloadAge is a helper used in tests to extract last_progress_age_ns
-// from a stalled envelope payload.
-func stalledPayloadAge(env Envelope) (time.Duration, error) {
-	var p struct {
-		LastProgressAgeNs int64 `json:"last_progress_age_ns"`
-	}
-	if err := json.Unmarshal(env.Payload, &p); err != nil {
-		return 0, fmt.Errorf("stalledPayloadAge: %w", err)
-	}
-	return time.Duration(p.LastProgressAgeNs), nil
 }

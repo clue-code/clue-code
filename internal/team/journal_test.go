@@ -28,7 +28,7 @@ func TestJournal_AppendAndRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenJournal: %v", err)
 	}
-	defer j.Close()
+	defer func() { _ = j.Close() }()
 
 	for i := uint64(1); i <= 5; i++ {
 		if err := j.Append(makeEnv(i)); err != nil {
@@ -88,7 +88,7 @@ func TestJournal_TornTailRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenJournal second: %v", err)
 	}
-	defer j2.Close()
+	defer func() { _ = j2.Close() }()
 
 	envs, err := j2.Read()
 	if err != nil {
@@ -130,7 +130,7 @@ func TestUnsupportedEnvelopeVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenJournal: %v", err)
 	}
-	defer j.Close()
+	defer func() { _ = j.Close() }()
 
 	_, err = j.Read()
 	if err == nil {
@@ -148,7 +148,7 @@ func TestJournal_ConcurrentAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenJournal: %v", err)
 	}
-	defer j.Close()
+	defer func() { _ = j.Close() }()
 
 	const goroutines = 10
 	const perGoroutine = 100

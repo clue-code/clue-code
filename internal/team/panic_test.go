@@ -18,7 +18,7 @@ func TestPanicRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TeamCreate: %v", err)
 	}
-	defer tm.Close()
+	defer func() { _ = tm.Close() }()
 
 	task1, err := tm.TaskCreate(TaskSpec{Owner: "worker-a", ID: "task1"})
 	if err != nil {
@@ -125,7 +125,7 @@ func TestPanicRecovery_NoCascade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TeamCreate: %v", err)
 	}
-	defer tm.Close()
+	defer func() { _ = tm.Close() }()
 
 	taskA, err := tm.TaskCreate(TaskSpec{Owner: "worker-a", ID: "taskA"})
 	if err != nil {
@@ -188,7 +188,7 @@ func TestRunWorker_NormalReturn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TeamCreate: %v", err)
 	}
-	defer tm.Close()
+	defer func() { _ = tm.Close() }()
 
 	task, err := tm.TaskCreate(TaskSpec{Owner: "w", ID: "t1"})
 	if err != nil {

@@ -120,7 +120,7 @@ func teamInspect(ctx context.Context, args []string) int {
 		fmt.Fprintf(os.Stderr, "team inspect: open: %v\n", err)
 		return 1
 	}
-	defer t.Close()
+	defer func() { _ = t.Close() }()
 
 	tasks := t.TaskList()
 
@@ -159,7 +159,7 @@ func teamTail(ctx context.Context, args []string) int {
 		fmt.Fprintf(os.Stderr, "team tail: open journal: %v\n", err)
 		return 1
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Seek to end so we only tail new entries.
 	if _, err := f.Seek(0, io.SeekEnd); err != nil {
@@ -343,7 +343,7 @@ func demoSubprocess(ctx context.Context, projectRoot string, numWorkers, msgsPer
 		}
 
 		go func(wID string, tr team.Transport) {
-			defer tr.Close()
+			defer func() { _ = tr.Close() }()
 			var sent, recvd int
 
 			// Receive acks concurrently.

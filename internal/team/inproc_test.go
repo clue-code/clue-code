@@ -11,8 +11,8 @@ import (
 func TestInproc_RoundTrip(t *testing.T) {
 	t.Parallel()
 	t1, t2 := NewInprocPair()
-	defer t1.Close()
-	defer t2.Close()
+	defer func() { _ = t1.Close() }()
+	defer func() { _ = t2.Close() }()
 
 	sent := Envelope{
 		V:       EnvelopeVersion,
@@ -60,8 +60,8 @@ func TestInproc_RoundTrip(t *testing.T) {
 func TestInproc_Concurrent(t *testing.T) {
 	t.Parallel()
 	ta, tb := NewInprocPair()
-	defer ta.Close()
-	defer tb.Close()
+	defer func() { _ = ta.Close() }()
+	defer func() { _ = tb.Close() }()
 
 	const count = 100
 	var wg sync.WaitGroup

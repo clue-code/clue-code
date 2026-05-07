@@ -109,7 +109,7 @@ func TestCrashResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer tm2.Close()
+	defer func() { _ = tm2.Close() }()
 
 	// Seq must be >= previous max to maintain monotonicity.
 	if tm2.seq.Load() < seqBeforeClose {
@@ -231,7 +231,7 @@ func TestRebuildFromJournalAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open after cache deletion: %v", err)
 	}
-	defer tm2.Close()
+	defer func() { _ = tm2.Close() }()
 
 	postTasks := tm2.TaskList()
 
