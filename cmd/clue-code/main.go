@@ -24,6 +24,7 @@ Commands:
   tokens       Token usage, cost summary, and cache management
   team         Manage and run agent teams (list, inspect, tail, demo)
   mcp          Bridge MCP servers (list, call)
+  mode         Get or set the dispatch mode (local|cloud|hybrid)
   tui          Launch the terminal UI (requires -tags=tui build)
   help         Show this message
 
@@ -63,6 +64,8 @@ func main() {
 		os.Exit(runTeamWorker(ctx, args))
 	case "mcp":
 		os.Exit(runMCP(ctx, args))
+	case "mode":
+		os.Exit(runMode(ctx, args))
 	case "tui":
 		os.Exit(runTUI(args))
 	case "help", "-h", "--help":

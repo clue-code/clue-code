@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,6 +70,77 @@ func Load() *Config {
 		}
 	}
 	return c
+}
+
+// persistConfig is the JSON structure used for config.json persistence.
+// It is separate from Config to allow partial saves without overwriting
+// fields managed by other subsystems (e.g. ModelByTier, BudgetUSDPerDay).
+type persistConfig struct {
+	Mode string `json:"mode"`
+}
+
+// SaveMode persists mode to the JSON config file at path.
+// The directory is created if it does not exist.
+func SaveMode(path string, mode Mode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("config: create dir %s: %w", dir, err)
+	}
+
+	// Read existing JSON to preserve other fields.
+	existing := map[string]any{}
+	if data, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(data, &existing)
+	}
+	existing["mode"] = string(mode)
+
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return fmt.Errorf("config: marshal: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("config: write %s: %w", path, err)
+	}
+	return nil
+}
+
+// LoadMode reads only the mode field from the JSON config file at path.
+// Returns ModeHybrid if the file does not exist or has no mode set.
+func LoadMode(path string) (Mode, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ModeHybrid, nil
+		}
+		return "", fmt.Errorf("config: read %s: %w", path, err)
+	}
+	var pc persistConfig
+	if err := json.Unmarshal(data, &pc); err != nil {
+		return ModeHybrid, nil
+	}
+	if pc.Mode == "" {
+		return ModeHybrid, nil
+	}
+	switch Mode(pc.Mode) {
+	case ModeLocal, ModeCloud, ModeHybrid:
+		return Mode(pc.Mode), nil
+	default:
+		return "", fmt.Errorf("config: invalid mode %q in %s", pc.Mode, path)
+	}
+}
+
+// JSONConfigPath returns the path to the JSON config file used for persistent
+// mode storage. It uses os.UserConfigDir() so it respects XDG on Linux and
+// ~/Library/Application Support on macOS.
+func JSONConfigPath() (string, error) {
+	if v := os.Getenv("CLUE_CODE_CONFIG"); v != "" {
+		return v, nil
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("config: user config dir: %w", err)
+	}
+	return filepath.Join(base, "clue-code", "config.json"), nil
 }
 
 // Validate returns an error if c contains invalid values.
