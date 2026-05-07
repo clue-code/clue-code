@@ -127,19 +127,31 @@ jobs:
   live-api:
     name: Live API probe
     runs-on: ubuntu-latest
-    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-    continue-on-error: false
+    continue-on-error: true
     steps:
+      - name: Check secret
+        id: check
+        run: |
+          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::ANTHROPIC_API_KEY secret not set, skipping live API test"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout
+        if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.4.0
 
       - name: Set up Go
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.25'
           cache: true
 
       - name: Live API test (Anthropic)
+        if: steps.check.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLUE_CODE_TEST_LIVE: "1"
