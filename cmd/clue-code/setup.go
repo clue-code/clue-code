@@ -348,8 +348,18 @@ func runInstallPhase(ctx context.Context, answers setup.Answers, prog *setup.Pro
 		_ = setup.ClearProgress()
 		return 0
 
+	case "hybrid:ollama+anthropic":
+		fmt.Println()
+		if err := runHybridInstall(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "\n%s\n", red("Erreur lors de la configuration hybrid : "+err.Error()))
+			fmt.Println(yellow("La progression a ete sauvegardee. Relancez 'clue-code setup' pour reprendre."))
+			return 1
+		}
+		_ = setup.ClearProgress()
+		return 0
+
 	default:
-		// hybrid or unknown providers — print steps and exit successfully.
+		// Unknown providers — print steps and exit successfully.
 		fmt.Println()
 		fmt.Println(cyan("Instructions de configuration :"))
 		for i, step := range rec.Steps {
@@ -531,6 +541,84 @@ menuLoop:
 		fmt.Println(red("Trop de tentatives invalides. Setup annule."))
 		return setup.ProviderScore{}, "cancel", fmt.Errorf("trop de tentatives invalides")
 	}
+}
+
+// runHybridInstall configures Ollama (local) + Anthropic (cloud) for hybrid mode.
+// It detects the current state of each component and only installs/configures
+// missing pieces. Mode is set to "hybrid" only when both components are ready.
+func runHybridInstall(ctx context.Context) error {
+	fmt.Println(cyan("Configuration mode hybrid (Ollama local + Anthropic cloud)"))
+	fmt.Println()
+
+	// --- Ollama ---
+	ollamaInstalled, _, _ := setup.DetectOllama()
+	if ollamaInstalled {
+		fmt.Println(green("✓") + " Ollama deja installe (skip)")
+	} else {
+		fmt.Println("→ Installation d'Ollama...")
+		if err := setup.InstallOllama(ctx, func(stage string, pct float64) {
+			fmt.Printf("  [%.0f%%] %s\n", pct*100, stage)
+		}); err != nil {
+			return fmt.Errorf("installation Ollama: %w", err)
+		}
+		fmt.Println(green("✓") + " Ollama installe avec succes")
+	}
+
+	// Check ctx after potentially long Ollama install.
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// --- Anthropic ---
+	keys := setup.DetectAPIKeys()
+	if keys["ANTHROPIC_API_KEY"] {
+		fmt.Println(green("✓") + " Anthropic deja configure (skip)")
+	} else {
+		fmt.Println()
+		fmt.Println("→ Configuration Anthropic Claude...")
+		if err := setup.OpenBrowser("https://console.anthropic.com/settings/keys"); err == nil {
+			fmt.Println(cyan("   Navigateur ouvert -> https://console.anthropic.com/settings/keys"))
+		} else {
+			fmt.Println(yellow("   1. Ouvrir: https://console.anthropic.com"))
+			fmt.Println(yellow("   2. Settings → API Keys → Create key"))
+			fmt.Println(yellow("   3. Copier la cle (commence par sk-ant-)"))
+		}
+		fmt.Println()
+		key := prompt(ctx, "Collez votre cle API Anthropic (sk-ant-...) : ")
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return fmt.Errorf("aucune cle Anthropic fournie")
+		}
+		if err := setup.ConfigureAnthropic(ctx, key); err != nil {
+			return fmt.Errorf("configuration Anthropic: %w", err)
+		}
+		fmt.Println(green("✓") + " Anthropic configure avec succes")
+	}
+
+	// Check ctx before final write.
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// --- Set mode = hybrid ---
+	if err := setup.SetMode("hybrid"); err != nil {
+		return fmt.Errorf("activation mode hybrid: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────")
+	fmt.Printf("%s %s\n", green("✓"), bold("Mode hybrid active !"))
+	fmt.Println()
+	fmt.Println("   Local fallback:  Ollama (sans connexion)")
+	fmt.Println("   Cloud premium:   Anthropic Claude (avec connexion)")
+	fmt.Println()
+	fmt.Println("   Test maintenant:")
+	fmt.Println("     clue-code chat \"hello\"")
+	fmt.Println("─────────────────────────────────────────────────────")
+	return nil
 }
 
 // handleCancel prints a cancellation message and returns exit code 1.

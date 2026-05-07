@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/clue-code/clue-code/internal/config"
 )
 
 // InstallOllama installs Ollama via the official install script, waits for
@@ -222,6 +224,17 @@ func ConfigureAnthropic(ctx context.Context, apiKey string) error {
 	fmt.Println("  Suggestion: ajoutez cette ligne a votre ~/.zshrc ou ~/.bashrc :")
 	fmt.Printf("  export ANTHROPIC_API_KEY=%s\n", apiKey)
 	return nil
+}
+
+// SetMode persists the given mode string (local|cloud|hybrid) to the standard
+// JSON config file. It wraps config.SaveMode so callers in cmd/ do not need
+// to import the config package directly.
+func SetMode(mode string) error {
+	path, err := config.JSONConfigPath()
+	if err != nil {
+		return fmt.Errorf("setup: resolve config path: %w", err)
+	}
+	return config.SaveMode(path, config.Mode(mode))
 }
 
 // OpenBrowser opens url in the system default browser.
