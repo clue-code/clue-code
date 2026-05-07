@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 const usage = `clue-code — multi-agent AI orchestration OS
@@ -36,11 +38,13 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usage)
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// No args → launch interactive REPL.
 	if len(os.Args) < 2 {
-		flag.Usage()
-		os.Exit(2)
+		os.Exit(runREPL(ctx))
 	}
-	ctx := context.Background()
 	cmd, args := os.Args[1], os.Args[2:]
 	switch cmd {
 	case "setup":
