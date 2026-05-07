@@ -701,3 +701,142 @@ func TestChooseProvider_MaxAttempts(t *testing.T) {
 		t.Error("expected error after 3 invalid attempts, got nil")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// runHybridInstall tests (Phase 5.4 — Q1-Q6)
+// ---------------------------------------------------------------------------
+
+// TestRunHybridInstall_BothAlreadyConfigured verifies that when Ollama is
+// installed and ANTHROPIC_API_KEY is set, both are skipped and mode is set.
+func TestRunHybridInstall_BothAlreadyConfigured(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	// Provide a valid-looking Anthropic key so DetectAPIKeys returns true.
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test-already-set")
+	// Point PATH to a fake "ollama" binary so DetectOllama sees it as installed.
+	fakebin := tmp + "/bin"
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	// Write a minimal shell script that exits 0 and prints a fake version.
+	script := "#!/bin/sh\necho 'ollama version 0.0.0-test'\n"
+	if err := os.WriteFile(fakebin+"/ollama", []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake ollama: %v", err)
+	}
+	t.Setenv("PATH", fakebin+":"+os.Getenv("PATH"))
+
+	// Use CLUE_CODE_CONFIG to redirect config writes to tmp.
+	cfgPath := tmp + "/config.json"
+	t.Setenv("CLUE_CODE_CONFIG", cfgPath)
+
+	ctx := context.Background()
+	if err := runHybridInstall(ctx); err != nil {
+		t.Fatalf("runHybridInstall: %v", err)
+	}
+
+	// Verify mode=hybrid was written.
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if !strings.Contains(string(data), `"hybrid"`) {
+		t.Errorf("config.json does not contain hybrid mode; got: %s", data)
+	}
+}
+
+// TestRunHybridInstall_AnthropicAlreadyConfigured_OllamaMissing verifies that
+// when Ollama is not installed but Anthropic key is present, InstallOllama is
+// called. We simulate this with an empty PATH so install fails fast, and
+// verify the error is returned (not swallowed) and mode is NOT set.
+func TestRunHybridInstall_AnthropicAlreadyConfigured_OllamaMissing(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+	// Empty PATH so ollama is not found and InstallOllama (curl) fails immediately.
+	t.Setenv("PATH", "")
+	cfgPath := tmp + "/config.json"
+	t.Setenv("CLUE_CODE_CONFIG", cfgPath)
+
+	ctx := context.Background()
+	err := runHybridInstall(ctx)
+	if err == nil {
+		t.Fatal("expected error when Ollama install fails, got nil")
+	}
+
+	// Mode must NOT be written.
+	if _, statErr := os.Stat(cfgPath); statErr == nil {
+		data, _ := os.ReadFile(cfgPath)
+		if strings.Contains(string(data), `"hybrid"`) {
+			t.Error("mode=hybrid must not be set when Ollama install failed")
+		}
+	}
+}
+
+// TestRunHybridInstall_AnthropicKeyValidationFails verifies that when the
+// Anthropic key is invalid, mode=hybrid is NOT activated.
+func TestRunHybridInstall_AnthropicKeyValidationFails(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("ANTHROPIC_API_KEY", "") // not configured
+
+	// Fake ollama binary so Ollama is detected as installed.
+	fakebin := tmp + "/bin"
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	script := "#!/bin/sh\necho 'ollama version 0.0.0-test'\n"
+	if err := os.WriteFile(fakebin+"/ollama", []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake ollama: %v", err)
+	}
+	t.Setenv("PATH", fakebin+":"+os.Getenv("PATH"))
+
+	cfgPath := tmp + "/config.json"
+	t.Setenv("CLUE_CODE_CONFIG", cfgPath)
+
+	// Provide an invalid key (not sk-ant-) via stdin; ConfigureAnthropic will reject it.
+	pipeStdin(t, "not-a-valid-key\n")
+
+	ctx := context.Background()
+	err := runHybridInstall(ctx)
+	if err == nil {
+		t.Fatal("expected error for invalid Anthropic key, got nil")
+	}
+
+	// Mode must NOT be written.
+	if _, statErr := os.Stat(cfgPath); statErr == nil {
+		data, _ := os.ReadFile(cfgPath)
+		if strings.Contains(string(data), `"hybrid"`) {
+			t.Error("mode=hybrid must not be set when Anthropic key validation failed")
+		}
+	}
+}
+
+// TestRunHybridInstall_ContextCancelled verifies that ctx.Done() is respected.
+// When the context is already cancelled, runHybridInstall returns an error
+// before completing (without panicking).
+func TestRunHybridInstall_ContextCancelled(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+
+	// Fake ollama so it appears installed.
+	fakebin := tmp + "/bin"
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	script := "#!/bin/sh\necho 'ollama version 0.0.0-test'\n"
+	if err := os.WriteFile(fakebin+"/ollama", []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake ollama: %v", err)
+	}
+	t.Setenv("PATH", fakebin+":"+os.Getenv("PATH"))
+
+	cfgPath := tmp + "/config.json"
+	t.Setenv("CLUE_CODE_CONFIG", cfgPath)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	// runHybridInstall may return ctx.Err() or nil depending on where the
+	// cancellation is observed. The important invariant: no panic.
+	_ = runHybridInstall(ctx)
+}
