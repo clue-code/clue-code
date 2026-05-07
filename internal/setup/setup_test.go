@@ -30,23 +30,24 @@ func TestRecommend_All8Combos(t *testing.T) {
 		{"sensitive_and_offline", Answers{Sensitive: true, Offline: true, HasMacM: false}, true},
 		{"cost_and_offline", Answers{PriorityCost: true, Offline: true, HasMacM: false}, true},
 		{"all_true", Answers{Sensitive: true, PriorityCost: true, Offline: true, HasMacM: false}, true},
-		// No-constraint scenarios: local providers outscore cloud on all platforms
-		// because baseline Privacy=10, Cost=10, Offline=10 gives ollama/qwen2.5
-		// score 54 vs anthropic 36 even with Quality×3. Correct scoring result.
+		// No-constraint scenarios: with weight=0 for non-prioritized dimensions,
+		// only the prioritized dimension matters.
+		// cost_first: Cost weight=5, Ollama Cost=10 → score 50 (wins over DeepSeek 45).
+		// quality_default: Quality weight=5, Anthropic Quality=10 → score 50 (wins over Ollama 8×5=40).
 		{"cost_first_no_constraints", Answers{PriorityCost: true, HasMacM: false}, true},
-		{"quality_default", Answers{HasMacM: false}, true},
+		{"quality_default", Answers{HasMacM: false}, false},
 	}
-
-	// cloudProviders is retained so the import/variable is not orphaned.
-	_ = cloudProviders
 
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := Recommend(tc.a)
-			if !localProviders[got.Provider] {
+			if tc.wantLocal && !localProviders[got.Provider] {
 				t.Errorf("Recommend(%+v).Provider = %q, want local provider (ollama/mlx)", tc.a, got.Provider)
+			}
+			if !tc.wantLocal && cloudProviders[got.Provider] == false {
+				t.Errorf("Recommend(%+v).Provider = %q, want cloud provider", tc.a, got.Provider)
 			}
 			if got.Justification == "" {
 				t.Errorf("Recommend(%+v).Justification must not be empty", tc.a)

@@ -76,9 +76,12 @@ func Recommend(a Answers) Recommendation {
 }
 
 // buildJustification produces a concise explanation of why top was chosen.
+// Only dimensions explicitly prioritized by the user are mentioned; unrequested
+// dimensions (e.g. privacy when the user said "cloud OK") are suppressed even
+// if the provider scores high on them.
 func buildJustification(a Answers, top ProviderScore) string {
 	parts := []string{}
-	if (a.Sensitive || top.Privacy >= 8) && top.Privacy >= 8 {
+	if a.Sensitive && top.Privacy >= 8 {
 		parts = append(parts, "vos donnees restent privees")
 	}
 	if a.PriorityCost && top.Cost >= 8 {
@@ -88,8 +91,12 @@ func buildJustification(a Answers, top ProviderScore) string {
 			parts = append(parts, fmt.Sprintf("cout minimal ($%.2f/M tokens)", top.CostUSD1M))
 		}
 	}
-	if !a.PriorityCost && top.Quality >= 8 {
-		parts = append(parts, "qualite top niveau")
+	if !a.PriorityCost {
+		if top.Quality >= 9 {
+			parts = append(parts, "qualite top niveau")
+		} else if top.Quality >= 7 {
+			parts = append(parts, "tres bonne qualite")
+		}
 	}
 	if a.Offline && top.Offline >= 8 {
 		parts = append(parts, "fonctionne hors-ligne")

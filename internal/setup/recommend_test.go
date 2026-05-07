@@ -10,43 +10,63 @@ import (
 // Scoring / Weights
 // ---------------------------------------------------------------------------
 
-// TestScoring_Weights verifies that PriorityCost=true triples Cost weight
-// and that Quality defaults to 3 when not cost-first.
+// TestScoring_Weights verifies that PriorityCost=true sets Cost weight to 5
+// and that Quality gets weight 5 when not cost-first (all others stay 0).
 func TestScoring_Weights(t *testing.T) {
 	t.Parallel()
 
 	wCost := WeightsFromAnswers(Answers{PriorityCost: true})
-	if wCost.Cost != 3 {
-		t.Errorf("PriorityCost=true: Cost weight = %.0f, want 3", wCost.Cost)
+	if wCost.Cost != 5 {
+		t.Errorf("PriorityCost=true: Cost weight = %.0f, want 5", wCost.Cost)
 	}
-	if wCost.Quality != 1 {
-		t.Errorf("PriorityCost=true: Quality weight = %.0f, want 1", wCost.Quality)
+	if wCost.Quality != 0 {
+		t.Errorf("PriorityCost=true: Quality weight = %.0f, want 0", wCost.Quality)
 	}
 
 	wQuality := WeightsFromAnswers(Answers{PriorityCost: false})
-	if wQuality.Quality != 3 {
-		t.Errorf("PriorityCost=false: Quality weight = %.0f, want 3", wQuality.Quality)
+	if wQuality.Quality != 5 {
+		t.Errorf("PriorityCost=false: Quality weight = %.0f, want 5", wQuality.Quality)
 	}
-	if wQuality.Cost != 1 {
-		t.Errorf("PriorityCost=false: Cost weight = %.0f, want 1", wQuality.Cost)
+	if wQuality.Cost != 0 {
+		t.Errorf("PriorityCost=false: Cost weight = %.0f, want 0", wQuality.Cost)
 	}
 }
 
-// TestScoring_Privacy verifies that Sensitive=true triples Privacy weight.
+// TestScoring_Privacy verifies that Sensitive=true sets Privacy weight to 5.
 func TestScoring_Privacy(t *testing.T) {
 	t.Parallel()
 	w := WeightsFromAnswers(Answers{Sensitive: true})
-	if w.Privacy != 3 {
-		t.Errorf("Sensitive=true: Privacy weight = %.0f, want 3", w.Privacy)
+	if w.Privacy != 5 {
+		t.Errorf("Sensitive=true: Privacy weight = %.0f, want 5", w.Privacy)
 	}
 }
 
-// TestScoring_Offline verifies that Offline=true triples Offline weight.
+// TestScoring_Offline verifies that Offline=true sets Offline weight to 5.
 func TestScoring_Offline(t *testing.T) {
 	t.Parallel()
 	w := WeightsFromAnswers(Answers{Offline: true})
-	if w.Offline != 3 {
-		t.Errorf("Offline=true: Offline weight = %.0f, want 3", w.Offline)
+	if w.Offline != 5 {
+		t.Errorf("Offline=true: Offline weight = %.0f, want 5", w.Offline)
+	}
+}
+
+// TestScoring_NonPrioritizedDimensionsAreZero verifies that dimensions not
+// explicitly requested by the user receive weight 0.
+func TestScoring_NonPrioritizedDimensionsAreZero(t *testing.T) {
+	t.Parallel()
+	// Cloud OK (not sensitive), online always (not offline), quality-first.
+	w := WeightsFromAnswers(Answers{Sensitive: false, PriorityCost: false, Offline: false})
+	if w.Privacy != 0 {
+		t.Errorf("Privacy should be 0 when not sensitive, got %.0f", w.Privacy)
+	}
+	if w.Offline != 0 {
+		t.Errorf("Offline should be 0 when not offline, got %.0f", w.Offline)
+	}
+	if w.Cost != 0 {
+		t.Errorf("Cost should be 0 when quality-first, got %.0f", w.Cost)
+	}
+	if w.Quality != 5 {
+		t.Errorf("Quality should be 5 when quality-first, got %.0f", w.Quality)
 	}
 }
 
@@ -81,7 +101,7 @@ func TestRanking_8Combinations(t *testing.T) {
 		name      string
 		a         Answers
 		wantLocal bool   // true = expect a local provider (ollama/mlx)
-		wantProv  string // non-empty only when wantLocal=false AND !isAppleSilicon
+		wantProv  string // specific provider when wantLocal=false
 	}{
 		// Any constraint (privacy, offline) → local provider regardless of platform.
 		{"sensitive_only", Answers{Sensitive: true}, true, ""},
@@ -90,12 +110,9 @@ func TestRanking_8Combinations(t *testing.T) {
 		{"sensitive_offline", Answers{Sensitive: true, Offline: true}, true, ""},
 		{"cost_offline", Answers{PriorityCost: true, Offline: true}, true, ""},
 		{"all_true", Answers{Sensitive: true, PriorityCost: true, Offline: true}, true, ""},
-		// No-constraint scenarios: local providers still win because their
-		// baseline scores (Privacy=10, Cost=10, Offline=10) give ollama/qwen2.5
-		// a total of 10+10+24+10=54 vs anthropic 4+2+30+0=36 with Quality×3.
-		// This is the correct multi-criteria result — local high-quality models
-		// outrank cloud even when quality is the sole priority.
-		{"all_false", Answers{}, true, ""},
+		// cloud OK + online always + quality-first → Anthropic wins (Quality=10 × 5 = 50).
+		{"all_false", Answers{}, false, "anthropic"},
+		// cost-first, cloud OK, online → Ollama wins (Cost=10 × 5 = 50 vs DeepSeek 9×5=45).
 		{"cost_first", Answers{PriorityCost: true}, true, ""},
 	}
 
@@ -111,10 +128,63 @@ func TestRanking_8Combinations(t *testing.T) {
 				t.Fatal("RankProviders returned empty slice")
 			}
 			top := ranked[0]
-			if !localProviders[top.Provider] {
-				t.Errorf("RankProviders(%s).top.Provider = %q, want local (ollama/mlx)", tc.name, top.Provider)
+			if tc.wantLocal {
+				if !localProviders[top.Provider] {
+					t.Errorf("RankProviders(%s).top.Provider = %q, want local (ollama/mlx)", tc.name, top.Provider)
+				}
+			} else if tc.wantProv != "" {
+				if top.Provider != tc.wantProv {
+					t.Errorf("RankProviders(%s).top.Provider = %q, want %q", tc.name, top.Provider, tc.wantProv)
+				}
 			}
 		})
+	}
+}
+
+// TestRecommend_CloudOnlineQuality is the regression test for the user-reported
+// bug: answers 2/2/2 (cloud OK, quality-first, always online) must recommend
+// Anthropic, not Ollama.
+func TestRecommend_CloudOnlineQuality(t *testing.T) {
+	t.Parallel()
+	a := Answers{Sensitive: false, PriorityCost: false, Offline: false}
+	ranked := RankProviders(a)
+	if len(ranked) == 0 {
+		t.Fatal("RankProviders returned empty slice")
+	}
+	top := ranked[0]
+	if top.Provider != "anthropic" {
+		t.Errorf("cloud+online+quality: top provider = %q, want \"anthropic\"", top.Provider)
+	}
+}
+
+// TestRecommend_CostFirstCloud verifies that cost-first + cloud-OK recommends
+// a free or cheap provider (ollama or deepseek).
+func TestRecommend_CostFirstCloud(t *testing.T) {
+	t.Parallel()
+	a := Answers{Sensitive: false, PriorityCost: true, Offline: false}
+	ranked := RankProviders(a)
+	if len(ranked) == 0 {
+		t.Fatal("RankProviders returned empty slice")
+	}
+	top := ranked[0]
+	cheap := map[string]bool{"ollama": true, "deepseek": true, "mlx": true}
+	if !cheap[top.Provider] {
+		t.Errorf("cost-first: top provider = %q, want ollama/deepseek/mlx", top.Provider)
+	}
+}
+
+// TestRecommend_PrivateOfflineQuality verifies sensitive+offline → local provider.
+func TestRecommend_PrivateOfflineQuality(t *testing.T) {
+	t.Parallel()
+	a := Answers{Sensitive: true, PriorityCost: false, Offline: true}
+	ranked := RankProviders(a)
+	if len(ranked) == 0 {
+		t.Fatal("RankProviders returned empty slice")
+	}
+	top := ranked[0]
+	local := map[string]bool{"ollama": true, "mlx": true}
+	if !local[top.Provider] {
+		t.Errorf("sensitive+offline: top provider = %q, want local (ollama/mlx)", top.Provider)
 	}
 }
 
@@ -281,6 +351,64 @@ func TestRecommendation_Justification(t *testing.T) {
 				t.Errorf("Justification %q does not contain %q", rec.Justification, tc.contains)
 			}
 		})
+	}
+}
+
+// TestJustification_NotSensitive_NoPrivacyClaim verifies that when the user did
+// not request privacy (Sensitive=false), the justification does NOT claim data
+// stays private even if the top provider has Privacy=10.
+func TestJustification_NotSensitive_NoPrivacyClaim(t *testing.T) {
+	t.Parallel()
+	// Craft a provider with perfect privacy score.
+	p := ProviderScore{
+		Provider: "ollama", Model: "test",
+		Privacy: 10, Cost: 10, Quality: 5, Offline: 10,
+	}
+	a := Answers{Sensitive: false, PriorityCost: false, Offline: false}
+	just := buildJustification(a, p)
+	if strings.Contains(just, "privees") {
+		t.Errorf("justification should NOT mention privacy when Sensitive=false, got %q", just)
+	}
+}
+
+// TestJustification_NotOffline_NoOfflineClaim verifies that when the user did
+// not request offline (Offline=false), the justification does NOT claim
+// offline capability even if the top provider has Offline=10.
+func TestJustification_NotOffline_NoOfflineClaim(t *testing.T) {
+	t.Parallel()
+	p := ProviderScore{
+		Provider: "ollama", Model: "test",
+		Privacy: 10, Cost: 10, Quality: 5, Offline: 10,
+	}
+	a := Answers{Sensitive: false, PriorityCost: false, Offline: false}
+	just := buildJustification(a, p)
+	if strings.Contains(just, "hors-ligne") {
+		t.Errorf("justification should NOT mention offline when Offline=false, got %q", just)
+	}
+}
+
+// TestJustification_TopQuality_OnlyForScore10 verifies quality wording tiers:
+// Quality=10 → "top niveau", Quality=7-8 → "tres bonne qualite", Quality<7 → absent.
+func TestJustification_TopQuality_OnlyForScore10(t *testing.T) {
+	t.Parallel()
+	a := Answers{Sensitive: false, PriorityCost: false, Offline: false}
+
+	p10 := ProviderScore{Provider: "anthropic", Model: "claude-sonnet-4-6", Quality: 10}
+	just10 := buildJustification(a, p10)
+	if !strings.Contains(just10, "top niveau") {
+		t.Errorf("Quality=10 should produce 'top niveau', got %q", just10)
+	}
+
+	p8 := ProviderScore{Provider: "ollama", Model: "qwen", Quality: 8}
+	just8 := buildJustification(a, p8)
+	if !strings.Contains(just8, "tres bonne qualite") {
+		t.Errorf("Quality=8 should produce 'tres bonne qualite', got %q", just8)
+	}
+
+	p5 := ProviderScore{Provider: "ollama", Model: "llama3.2", Quality: 5}
+	just5 := buildJustification(a, p5)
+	if strings.Contains(just5, "qualite top") || strings.Contains(just5, "tres bonne") {
+		t.Errorf("Quality=5 should NOT mention quality tiers, got %q", just5)
 	}
 }
 
