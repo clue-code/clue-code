@@ -11,9 +11,10 @@ import (
 
 // TestFanOut (D1): 4 workers, each creates 2 tasks + sends 3 messages.
 // Journal must contain exactly 21 lines:
-//   1  team-create
-//   4 workers × (2 task-create + 3 message) = 4 × 5 = 20
-//   Total = 21
+//
+//	1  team-create
+//	4 workers × (2 task-create + 3 message) = 4 × 5 = 20
+//	Total = 21
 func TestFanOut(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

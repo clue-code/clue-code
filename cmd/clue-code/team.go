@@ -364,13 +364,13 @@ func demoSubprocess(ctx context.Context, projectRoot string, numWorkers, msgsPer
 			for j := 0; j < msgsPerWorker; j++ {
 				payload, _ := json.Marshal(map[string]int{"n": j})
 				env := team.Envelope{
-					V:    team.EnvelopeVersion,
-					Seq:  uint64(j),
-					From: "parent",
-					To:   wID,
-					Kind: "ping",
+					V:       team.EnvelopeVersion,
+					Seq:     uint64(j),
+					From:    "parent",
+					To:      wID,
+					Kind:    "ping",
 					Payload: json.RawMessage(payload),
-					Ts:   time.Now().UTC(),
+					Ts:      time.Now().UTC(),
 				}
 				if err := tr.Send(env); err != nil {
 					results <- result{wID, sent, recvd, err}

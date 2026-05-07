@@ -39,7 +39,7 @@ func (realClock) NewTicker(d time.Duration) Ticker {
 type realTicker struct{ t *time.Ticker }
 
 func (r *realTicker) C() <-chan time.Time { return r.t.C }
-func (r *realTicker) Stop()              { r.t.Stop() }
+func (r *realTicker) Stop()               { r.t.Stop() }
 
 // FakeClock is a manually-advanced Clock for use in tests.
 type FakeClock struct {
