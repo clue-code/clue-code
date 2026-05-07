@@ -89,10 +89,52 @@ type ProviderKeys struct {
 	Mode            Mode
 }
 
+// migrateLegacyConfig checks for a legacy XDG config at
+// ~/.config/clue-code/config.json when the canonical path (e.g.
+// ~/Library/Application Support/clue-code/config.json on macOS) does not yet
+// exist. If found, it merges the legacy file into the canonical path and logs a
+// warning. This repairs the split-brain that occurred when ConfigureAnthropic /
+// ConfigureDeepSeek wrote to the XDG path while SetMode used UserConfigDir.
+func migrateLegacyConfig(canonicalPath string) {
+	// Only attempt migration when canonical file is absent.
+	if _, err := os.Stat(canonicalPath); err == nil {
+		return
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	legacyPath := filepath.Join(home, ".config", "clue-code", "config.json")
+	if legacyPath == canonicalPath {
+		return // same path — no migration needed (Linux XDG case)
+	}
+	data, err := os.ReadFile(legacyPath)
+	if err != nil {
+		return // no legacy file — nothing to migrate
+	}
+
+	// Ensure canonical directory exists.
+	if err := os.MkdirAll(filepath.Dir(canonicalPath), 0o700); err != nil {
+		return
+	}
+	// Copy legacy content to canonical path.
+	if err := os.WriteFile(canonicalPath, data, 0o600); err != nil {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "clue-code: migrated config from legacy path %s to %s\n", legacyPath, canonicalPath)
+}
+
 // LoadJSONConfig reads config.json at path and returns the persisted provider
 // keys and mode. Returns a zero-value ProviderKeys (no error) if the file does
 // not exist, so callers degrade gracefully when no wizard has been run.
+//
+// As a one-time migration, if path does not exist but the legacy XDG path
+// (~/.config/clue-code/config.json) does, the legacy file is copied to path
+// so macOS users who ran setup before this fix do not lose their config.
 func LoadJSONConfig(path string) (ProviderKeys, error) {
+	migrateLegacyConfig(path)
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

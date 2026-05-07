@@ -249,6 +249,16 @@ main() {
   chmod +x "$extracted_bin"
   mv "$extracted_bin" "${INSTALL_DIR}/${BINARY_NAME}"
 
+  # macOS Gatekeeper: strip quarantine and provenance extended attributes that
+  # cause SIGKILL on first run after download. Silently ignored on Linux.
+  if [[ "$OS" == "darwin" ]]; then
+    xattr -dr com.apple.quarantine "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+    xattr -dr com.apple.provenance "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+    # Apply ad-hoc codesign so macOS Gatekeeper accepts the binary without
+    # requiring an Apple Developer ID. This is sufficient for local builds.
+    codesign --force --sign - "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+  fi
+
   ok "Installed ${c_bold}${INSTALL_DIR}/${BINARY_NAME}${c_reset} (${VERSION})"
   hr
 

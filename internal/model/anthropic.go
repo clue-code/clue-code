@@ -46,6 +46,11 @@ type anthropicClient struct {
 
 func (c *anthropicClient) Provider() string { return "anthropic" }
 
+// ModelID returns the model ID this client was configured with.
+// It satisfies the optional interface checked by RealRunner so that
+// ChatRequest.Model is always populated.
+func (c *anthropicClient) ModelID() string { return c.modelID }
+
 // anthropicSystemBlock is a system prompt block, optionally with cache_control.
 type anthropicSystemBlock struct {
 	Type         string                 `json:"type"`
@@ -112,7 +117,13 @@ func (c *anthropicClient) buildRequest(ctx context.Context, req ChatRequest, str
 
 	// Strip provider prefix (e.g. "anthropic/claude-sonnet-4-5" → "claude-sonnet-4-5")
 	// so the Anthropic API receives only the bare model name.
+	// Defensive fallback: if the caller left Model empty (e.g. RealRunner before
+	// P0-5 fix), use the model ID the client was configured with so the request
+	// does not reach the API with an empty "model" field (which causes HTTP 400).
 	apiModel := req.Model
+	if apiModel == "" {
+		apiModel = c.modelID
+	}
 	if after, ok := strings.CutPrefix(apiModel, "anthropic/"); ok {
 		apiModel = after
 	}
