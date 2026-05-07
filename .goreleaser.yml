@@ -1,0 +1,149 @@
+# .goreleaser.yml — CLUE CODE release configuration
+# Docs: https://goreleaser.com/customization/
+#
+# Usage (local snapshot test, no publish):
+#   goreleaser release --snapshot --clean --skip=publish
+#
+# Production release is triggered by pushing a tag:
+#   git tag -s v1.0.0 -m "Release 1.0.0"
+#   git push origin v1.0.0
+# The GitHub Actions workflow (.github/workflows/release.yml) handles signing.
+
+version: 2
+
+project_name: clue-code
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  # ── no-tag binary (minimal, no TUI) ────────────────────────────────────
+  - id: clue-code-notag
+    binary: clue-code
+    main: ./cmd/clue-code
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/clue-code/clue-code/internal/version.Version={{.Version}}
+      - -X github.com/clue-code/clue-code/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/clue-code/clue-code/internal/version.Date={{.Date}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+  # ── tui binary (with Bubble Tea TUI) ────────────────────────────────────
+  - id: clue-code-tui
+    binary: clue-code-tui
+    main: ./cmd/clue-code
+    tags:
+      - tui
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/clue-code/clue-code/internal/version.Version={{.Version}}
+      - -X github.com/clue-code/clue-code/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/clue-code/clue-code/internal/version.Date={{.Date}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: clue-code-archive
+    builds:
+      - clue-code-notag
+      - clue-code-tui
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - docs/migration-from-omc.md
+
+checksum:
+  name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
+  algorithm: sha256
+
+signs:
+  # Keyless signing via Sigstore / OIDC — requires `id-token: write` in GitHub Actions.
+  # This config is a no-op locally; signing happens in the release workflow.
+  - id: cosign-keyless
+    cmd: cosign
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - '--yes'
+    artifacts: checksum
+    output: true
+
+snapshot:
+  # Local snapshot builds (goreleaser release --snapshot --clean --skip=publish)
+  # produce binaries tagged with <version>-SNAPSHOT-<commit>.
+  version_template: '{{ incpatch .Version }}-SNAPSHOT-{{ .ShortCommit }}'
+
+changelog:
+  sort: asc
+  use: git
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge remote-tracking branch
+  groups:
+    - title: 'New Features'
+      regexp: '^feat'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^fix'
+      order: 1
+    - title: 'Other Changes'
+      order: 999
+
+release:
+  github:
+    owner: clue-code
+    name: clue-code
+  draft: false
+  prerelease: auto
+  name_template: 'CLUE CODE {{.Version}}'
+  header: |
+    See [docs/release-notes-v{{ .Version }}.md](https://github.com/clue-code/clue-code/blob/main/docs/release-notes-v{{ .Version }}.md) for full release notes.
+  footer: |
+    ## Install
+
+    ```bash
+    # macOS / Linux one-liner (after release is published):
+    bash <(curl -sSL https://github.com/clue-code/clue-code/releases/latest/download/install.sh)
+    ```
+
+    ## Verify signature
+
+    ```bash
+    cosign verify-blob \
+      --certificate clue-code_{{ .Version }}_checksums.txt.pem \
+      --signature   clue-code_{{ .Version }}_checksums.txt.sig \
+      --certificate-identity-regexp "https://github.com/clue-code/clue-code/.*" \
+      --certificate-oidc-issuer    "https://token.actions.githubusercontent.com" \
+      clue-code_{{ .Version }}_checksums.txt
+    ```

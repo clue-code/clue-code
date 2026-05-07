@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # create GitHub release + upload assets
+  id-token: write   # Sigstore / OIDC keyless signing
+
+jobs:
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.4.0
+        with:
+          fetch-depth: 0   # full history for changelog generation
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3ddf8193cf5b71d2b4c5f7a7e1d2a # v3.8.1
+
+      - name: Verify cosign installation
+        run: cosign version
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@9c5b57d8fdfc0f65e5543c7b65e8f8c17e58e3a9 # v6.3.0
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # COSIGN_EXPERIMENTAL=1 enables keyless signing via GitHub OIDC.
+          COSIGN_EXPERIMENTAL: '1'
