@@ -65,9 +65,9 @@ func (s *replSession) Save(path string) error {
 	}
 	var sb strings.Builder
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("date: %s\n", time.Now().UTC().Format(time.RFC3339)))
-	sb.WriteString(fmt.Sprintf("model: %s\n", s.modelID))
-	sb.WriteString(fmt.Sprintf("tokens: %d\n", s.tokensUsed.TotalTokens))
+	fmt.Fprintf(&sb, "date: %s\n", time.Now().UTC().Format(time.RFC3339))
+	fmt.Fprintf(&sb, "model: %s\n", s.modelID)
+	fmt.Fprintf(&sb, "tokens: %d\n", s.tokensUsed.TotalTokens)
 	sb.WriteString("---\n\n")
 
 	for _, msg := range s.history {

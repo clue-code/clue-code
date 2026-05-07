@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,26 +21,80 @@ func newScannerFromString(s string) *bufio.Scanner {
 	return bufio.NewScanner(strings.NewReader(s))
 }
 
+// captureStdout redirects os.Stdout to a pipe, calls f, then restores stdout
+// and returns what was written. The test is fatally failed if the pipe setup fails.
+func captureStdout(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+
+	f()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("pipe write-end Close: %v", err)
+	}
+	os.Stdout = old
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("pipe ReadAll: %v", err)
+	}
+	return string(out)
+}
+
+// discardStdout redirects os.Stdout to io.Discard for the duration of f.
+func discardStdout(t *testing.T, f func()) {
+	t.Helper()
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+
+	f()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("pipe write-end Close: %v", err)
+	}
+	os.Stdout = old
+}
+
+// discardStderr redirects os.Stderr to io.Discard for the duration of f,
+// returning what was written.
+func captureStderr(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	old := os.Stderr
+	os.Stderr = w
+
+	f()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("pipe write-end Close: %v", err)
+	}
+	os.Stderr = old
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("pipe ReadAll: %v", err)
+	}
+	return string(out)
+}
+
 // --- REPL unit tests (no real API) ---
 
 // TestREPL_HelpCommand verifies /help output contains expected keywords.
 func TestREPL_HelpCommand(t *testing.T) {
 	sess := newReplSession("test/model")
-	var out strings.Builder
-	// Redirect stdout to capture output.
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	sess.Help()
-
-	w.Close()
-	os.Stdout = old
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	out.Write(buf[:n])
-
-	helpText := out.String()
+	helpText := captureStdout(t, sess.Help)
 	for _, keyword := range []string{"exit", "clear", "save", "/help"} {
 		if !strings.Contains(helpText, keyword) {
 			t.Errorf("Help() output missing %q; got:\n%s", keyword, helpText)
@@ -57,13 +112,7 @@ func TestREPL_ClearCommand(t *testing.T) {
 		t.Fatalf("expected 3 history entries before clear, got %d", len(sess.history))
 	}
 
-	// Suppress stdout for the "[history cleared]" print.
-	old := os.Stdout
-	_, w, _ := os.Pipe()
-	os.Stdout = w
-	sess.Clear()
-	w.Close()
-	os.Stdout = old
+	discardStdout(t, sess.Clear)
 
 	if len(sess.history) != 0 {
 		t.Errorf("expected history len=0 after Clear(), got %d", len(sess.history))
@@ -78,15 +127,12 @@ func TestREPL_SaveCommand(t *testing.T) {
 
 	path := t.TempDir() + "/conversation.md"
 
-	old := os.Stdout
-	_, w, _ := os.Pipe()
-	os.Stdout = w
-	err := sess.Save(path)
-	w.Close()
-	os.Stdout = old
-
-	if err != nil {
-		t.Fatalf("Save() returned error: %v", err)
+	var saveErr error
+	discardStdout(t, func() {
+		saveErr = sess.Save(path)
+	})
+	if saveErr != nil {
+		t.Fatalf("Save() returned error: %v", saveErr)
 	}
 
 	data, err := os.ReadFile(path)
@@ -136,8 +182,12 @@ func TestREPL_ConversationContext(t *testing.T) {
 				{"delta": map[string]any{"content": "reply"}},
 			},
 		})
-		fmt.Fprintf(w, "data: %s\n\n", payload)
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+			return
+		}
+		if _, err := fmt.Fprint(w, "data: [DONE]\n\n"); err != nil {
+			return
+		}
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
@@ -152,33 +202,32 @@ func TestREPL_ConversationContext(t *testing.T) {
 
 	sess := newReplSession("deepseek-chat")
 
-	// Redirect stdout to suppress REPL output.
-	old := os.Stdout
-	_, w, _ := os.Pipe()
-	os.Stdout = w
+	var (
+		assistant1 string
+		usage1     model.Usage
+		err1       error
+		err2       error
+	)
 
-	// First exchange.
-	sess.AppendUser("first question")
-	assistant1, usage1, err := sendStreaming(context.Background(), client, "deepseek-chat", sess.history)
-	if err != nil {
-		w.Close()
-		os.Stdout = old
-		t.Fatalf("first sendStreaming: %v", err)
+	discardStdout(t, func() {
+		// First exchange.
+		sess.AppendUser("first question")
+		assistant1, usage1, err1 = sendStreaming(context.Background(), client, "deepseek-chat", sess.history)
+		if err1 == nil {
+			sess.AppendAssistant(assistant1)
+			sess.AddUsage(usage1)
+			// Second exchange.
+			sess.AppendUser("second question")
+			_, _, err2 = sendStreaming(context.Background(), client, "deepseek-chat", sess.history)
+		}
+	})
+
+	if err1 != nil {
+		t.Fatalf("first sendStreaming: %v", err1)
 	}
-	sess.AppendAssistant(assistant1)
-	sess.AddUsage(usage1)
-
-	// Second exchange.
-	sess.AppendUser("second question")
-	_, _, err = sendStreaming(context.Background(), client, "deepseek-chat", sess.history)
-
-	w.Close()
-	os.Stdout = old
-
-	if err != nil {
-		t.Fatalf("second sendStreaming: %v", err)
+	if err2 != nil {
+		t.Fatalf("second sendStreaming: %v", err2)
 	}
-
 	if len(capturedBodies) < 2 {
 		t.Fatalf("expected 2 requests, got %d", len(capturedBodies))
 	}
@@ -206,24 +255,18 @@ func TestREPL_StreamingOutput(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	// Redirect stdout to capture streamed output.
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
 	msgs := []model.Message{{Role: model.RoleUser, Content: "hi"}}
-	result, _, err := sendStreaming(context.Background(), client, "deepseek-chat", msgs)
+	var (
+		result  string
+		printed string
+		sendErr error
+	)
+	printed = captureStdout(t, func() {
+		result, _, sendErr = sendStreaming(context.Background(), client, "deepseek-chat", msgs)
+	})
 
-	w.Close()
-	os.Stdout = old
-
-	// Read captured stdout.
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	printed := string(buf[:n])
-
-	if err != nil {
-		t.Fatalf("sendStreaming error: %v", err)
+	if sendErr != nil {
+		t.Fatalf("sendStreaming error: %v", sendErr)
 	}
 	if result != "Hello world!" {
 		t.Errorf("assembled response = %q, want %q", result, "Hello world!")
@@ -246,7 +289,9 @@ func TestREPL_CtrlCInterrupt(t *testing.T) {
 					{"delta": map[string]any{"content": fmt.Sprintf("tok%d ", i)}},
 				},
 			})
-			fmt.Fprintf(w, "data: %s\n\n", payload)
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+				return
+			}
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
@@ -256,7 +301,9 @@ func TestREPL_CtrlCInterrupt(t *testing.T) {
 			case <-time.After(20 * time.Millisecond):
 			}
 		}
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		if _, err := fmt.Fprint(w, "data: [DONE]\n\n"); err != nil {
+			return
+		}
 	}))
 	defer srv.Close()
 
@@ -274,35 +321,25 @@ func TestREPL_CtrlCInterrupt(t *testing.T) {
 		cancel()
 	}()
 
-	// Suppress stdout.
-	old := os.Stdout
-	_, w, _ := os.Pipe()
-	os.Stdout = w
-
 	msgs := []model.Message{{Role: model.RoleUser, Content: "long task"}}
-	_, _, err = sendStreaming(ctx, client, "deepseek-chat", msgs)
-
-	w.Close()
-	os.Stdout = old
+	var sendErr error
+	discardStdout(t, func() {
+		_, _, sendErr = sendStreaming(ctx, client, "deepseek-chat", msgs)
+	})
 
 	// Must not panic. err should be context.Canceled (or nil if stream finished first).
-	if err != nil && err != context.Canceled && !strings.Contains(err.Error(), "context") {
-		t.Errorf("unexpected error: %v (expected nil or context.Canceled)", err)
+	if sendErr != nil && sendErr != context.Canceled && !strings.Contains(sendErr.Error(), "context") {
+		t.Errorf("unexpected error: %v (expected nil or context.Canceled)", sendErr)
 	}
-	t.Logf("interrupt err = %v (ok)", err)
+	t.Logf("interrupt err = %v (ok)", sendErr)
 }
 
 // TestREPL_SetModel verifies /model updates the session model ID.
 func TestREPL_SetModel(t *testing.T) {
 	sess := newReplSession("original/model")
-
-	old := os.Stdout
-	_, w, _ := os.Pipe()
-	os.Stdout = w
-	sess.SetModel("anthropic/claude-haiku-4-5")
-	w.Close()
-	os.Stdout = old
-
+	discardStdout(t, func() {
+		sess.SetModel("anthropic/claude-haiku-4-5")
+	})
 	if sess.modelID != "anthropic/claude-haiku-4-5" {
 		t.Errorf("modelID = %q, want %q", sess.modelID, "anthropic/claude-haiku-4-5")
 	}
@@ -327,13 +364,11 @@ func TestREPL_MultiLineContinuation(t *testing.T) {
 	input := "first line\\\nsecond line\n"
 	scanner := newScannerFromString(input)
 
-	// Redirect stdout to suppress the "... " continuation prompt.
-	old := os.Stdout
-	_, w, _ := os.Pipe()
-	os.Stdout = w
-	line, ok := readLine(scanner)
-	w.Close()
-	os.Stdout = old
+	var line string
+	var ok bool
+	discardStdout(t, func() {
+		line, ok = readLine(scanner)
+	})
 
 	if !ok {
 		t.Fatal("readLine returned ok=false")
@@ -347,21 +382,11 @@ func TestREPL_MultiLineContinuation(t *testing.T) {
 // not exit.
 func TestREPL_UnknownMetaCommand(t *testing.T) {
 	sess := newReplSession("test/model")
-
-	old := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stderr = w
-	exit := handleMetaCommand(sess, "/unknown")
-	w.Close()
-	os.Stderr = old
-
-	buf := make([]byte, 512)
-	n, _ := r.Read(buf)
-	errOut := string(buf[:n])
-
-	if exit {
-		t.Error("unknown command should not cause exit")
-	}
+	errOut := captureStderr(t, func() {
+		if handleMetaCommand(sess, "/unknown") {
+			t.Error("unknown command should not cause exit")
+		}
+	})
 	if !strings.Contains(errOut, "unknown command") {
 		t.Errorf("expected 'unknown command' in stderr; got %q", errOut)
 	}
