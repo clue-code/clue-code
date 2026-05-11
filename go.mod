@@ -10,8 +10,8 @@ require (
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260503005035-c113ba3d2310
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
-	golang.org/x/sys v0.43.0
-	golang.org/x/term v0.42.0
+	golang.org/x/sys v0.44.0
+	golang.org/x/term v0.43.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )
